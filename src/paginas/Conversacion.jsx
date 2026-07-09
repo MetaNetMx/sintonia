@@ -1,0 +1,276 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useAcompanamiento } from '../ia/useAcompanamiento.js';
+import { componerSistema } from '../ia/prompts.js';
+import { LENTE_ACTIVA } from '../fuentes/lente.js';
+import { iniciarGrabacion, soportaGrabacion } from '../voz/clonacion.js';
+import { transcribir } from '../voz/transcribir.js';
+import { listarVoces } from '../voz/voces.js';
+import { useTTS } from '../voz/useTTS.js';
+import ModalCrisis from '../seguridad/ModalCrisis.jsx';
+
+// Estilo de voz: respuestas breves y "hablables" (se van a escuchar).
+const DIRECTOR_VOZ = `ESTILO DE CONVERSACION POR VOZ: la persona te habla por notas de voz. Responde de forma breve y natural, como si hablaras en voz alta (2 a 4 frases), calido y cercano en espanol de Mexico. Una idea a la vez. Evita listas, vinetas y formato: tu respuesta se va a ESCUCHAR, no a leer. Cuando sea natural, cierra con una sola pregunta abierta.`;
+
+// Conversacion por voz (PRD §15): hablas por notas de voz (ElevenLabs Scribe) y
+// la app responde con voz natural (ElevenLabs). Misma lente + seguridad que la
+// Sesion. Requiere ELEVENLABS_API_KEY para voz/transcripcion; sin ella, avisa.
+export default function Conversacion() {
+  const sistema = useMemo(
+    () => componerSistema({ lente: LENTE_ACTIVA }) + '\n\n' + DIRECTOR_VOZ,
+    []
+  );
+  const { mensajes, cargando, error, crisis, enviar, reconocerCrisis, reiniciar } =
+    useAcompanamiento({ sistema });
+  const tts = useTTS();
+
+  const [grabando, setGrabando] = useState(false);
+  const [procesando, setProcesando] = useState(false);
+  const [errorVoz, setErrorVoz] = useState(null);
+  const [texto, setTexto] = useState('');
+  const [voces, setVoces] = useState([]);
+  const [voiceId, setVoiceId] = useState('');
+  const [mostrarTexto, setMostrarTexto] = useState(true);
+
+  const controlRef = useRef(null);
+  const ultimoHabladoRef = useRef(null);
+  const puedeGrabar = soportaGrabacion();
+
+  // Cargar voces disponibles (si hay ElevenLabs configurado).
+  useEffect(() => {
+    let vivo = true;
+    listarVoces().then((lista) => {
+      if (vivo) setVoces(lista);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
+  // Reproducir automaticamente la ultima respuesta del asistente.
+  useEffect(() => {
+    const ultimo = mensajes[mensajes.length - 1];
+    if (ultimo && ultimo.rol === 'asistente' && ultimo.id !== ultimoHabladoRef.current) {
+      ultimoHabladoRef.current = ultimo.id;
+      tts.hablar({ texto: ultimo.contenido, voiceId: voiceId || undefined });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mensajes]);
+
+  const iniciar = async () => {
+    setErrorVoz(null);
+    tts.detener();
+    try {
+      controlRef.current = await iniciarGrabacion();
+      setGrabando(true);
+    } catch {
+      setErrorVoz('No pude acceder al micrófono. Revisa los permisos del navegador.');
+    }
+  };
+
+  const detenerYEnviar = async () => {
+    if (!controlRef.current) return;
+    setGrabando(false);
+    setProcesando(true);
+    try {
+      const audio = await controlRef.current.detener();
+      controlRef.current = null;
+      const dicho = await transcribir(audio, { idioma: 'es' });
+      if (dicho && dicho.trim()) {
+        enviar(dicho.trim());
+      } else {
+        setErrorVoz('No alcancé a entender el audio. ¿Lo intentamos de nuevo?');
+      }
+    } catch {
+      setErrorVoz(
+        'No pude transcribir. ¿Está configurada la voz? (falta ELEVENLABS_API_KEY en .env.local)'
+      );
+    } finally {
+      setProcesando(false);
+    }
+  };
+
+  const enviarTexto = (evento) => {
+    evento.preventDefault();
+    const limpio = texto.trim();
+    if (!limpio || cargando) return;
+    setTexto('');
+    tts.detener();
+    enviar(limpio);
+  };
+
+  const ocupado = cargando || procesando;
+
+  return (
+    <section>
+      <h1 className="text-2xl font-medium text-[var(--color-texto)]">
+        Conversar por voz
+      </h1>
+      <p className="mt-2 max-w-prose text-[var(--color-texto-suave)]">
+        Háblale como una nota de voz y te responde con voz. Con calma, una idea a
+        la vez. Es un espacio de exploración, no un tratamiento.
+      </p>
+
+      {/* Selector de voz (si hay voces disponibles) */}
+      {voces.length > 0 && (
+        <div className="mt-4 flex items-center gap-2">
+          <label htmlFor="voz" className="text-sm text-[var(--color-texto-suave)]">
+            Voz:
+          </label>
+          <select
+            id="voz"
+            value={voiceId}
+            onChange={(e) => setVoiceId(e.target.value)}
+            className="rounded-[var(--radius-suave)] border border-[var(--color-borde)] bg-[var(--color-superficie)] px-3 py-1.5 text-sm text-[var(--color-texto)]"
+          >
+            <option value="">Voz por defecto</option>
+            {voces.map((v) => (
+              <option key={v.voiceId} value={v.voiceId}>
+                {v.nombre}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      <div
+        className="mt-6 flex min-h-[18rem] flex-col gap-3 rounded-[var(--radius-suave)] border border-[var(--color-borde)] bg-[var(--color-superficie)] p-4"
+        aria-live="polite"
+      >
+        {mensajes.length === 0 && (
+          <p className="m-auto max-w-prose text-center text-[var(--color-texto-tenue)]">
+            Toca el micrófono y cuéntame qué estás viviendo. Sin prisa.
+          </p>
+        )}
+
+        {mensajes.map((mensaje) => {
+          const esUsuario = mensaje.rol === 'usuario';
+          return (
+            <div
+              key={mensaje.id}
+              className={esUsuario ? 'flex justify-end' : 'flex flex-col items-start gap-1'}
+            >
+              <p
+                className={[
+                  'max-w-[85%] whitespace-pre-wrap rounded-[var(--radius-suave)] px-4 py-2.5 leading-relaxed',
+                  esUsuario
+                    ? 'bg-[var(--color-superficie-alta)] text-[var(--color-texto)]'
+                    : 'border border-[var(--color-borde)] text-[var(--color-texto-suave)]',
+                ].join(' ')}
+              >
+                {mostrarTexto || esUsuario ? mensaje.contenido : '🔊 Mensaje de voz'}
+              </p>
+              {!esUsuario && (
+                <button
+                  type="button"
+                  onClick={() => tts.hablar({ texto: mensaje.contenido, voiceId: voiceId || undefined })}
+                  className="text-xs text-[var(--color-acento)]"
+                  aria-label="Escuchar esta respuesta de nuevo"
+                >
+                  ▶ Escuchar
+                </button>
+              )}
+            </div>
+          );
+        })}
+
+        {ocupado && (
+          <p className="text-sm text-[var(--color-texto-tenue)]">
+            {procesando ? 'Transcribiendo…' : 'Pensando…'}
+          </p>
+        )}
+      </div>
+
+      {crisis.nivel === 'atencion' && !crisis.activa && (
+        <p className="mt-3 text-sm text-[var(--color-texto-suave)]">
+          Si sientes que necesitas hablar con una persona, no tienes que
+          atravesarlo en soledad; hay líneas de apoyo disponibles.
+        </p>
+      )}
+      {(error || errorVoz) && (
+        <p className="mt-3 text-sm text-[var(--color-texto-suave)]">
+          {errorVoz || 'No pude conectar con el servicio. Reintenta en un momento.'}
+        </p>
+      )}
+
+      {/* Control de grabacion (nota de voz) */}
+      <div className="mt-5 flex flex-col items-center gap-3">
+        {puedeGrabar ? (
+          !grabando ? (
+            <button
+              type="button"
+              onClick={iniciar}
+              disabled={ocupado}
+              className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--color-acento)] text-2xl text-[var(--color-acento-contraste)] disabled:opacity-40"
+              aria-label="Grabar nota de voz"
+            >
+              🎙️
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={detenerYEnviar}
+              className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-[var(--color-acento)] text-2xl text-[var(--color-texto)]"
+              aria-label="Detener y enviar la nota de voz"
+            >
+              ⏹️
+            </button>
+          )
+        ) : (
+          <p className="text-sm text-[var(--color-texto-tenue)]">
+            Este navegador no permite grabar; usa el campo de texto.
+          </p>
+        )}
+        <p className="text-xs text-[var(--color-texto-tenue)]">
+          {grabando ? 'Grabando… toca para enviar' : 'Toca para hablar'}
+        </p>
+      </div>
+
+      {/* Texto de respaldo + controles */}
+      <form onSubmit={enviarTexto} className="mt-4 flex gap-2">
+        <label htmlFor="texto-voz" className="sr-only">
+          Escribe si prefieres
+        </label>
+        <input
+          id="texto-voz"
+          type="text"
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          placeholder="…o escribe aquí"
+          className="flex-1 rounded-[var(--radius-suave)] border border-[var(--color-borde)] bg-[var(--color-superficie)] px-3 py-2 text-[var(--color-texto)] placeholder:text-[var(--color-texto-tenue)]"
+        />
+        <button
+          type="submit"
+          disabled={ocupado || !texto.trim()}
+          className="rounded-[var(--radius-suave)] bg-[var(--color-acento)] px-4 py-2 font-medium text-[var(--color-acento-contraste)] disabled:opacity-40"
+        >
+          Enviar
+        </button>
+      </form>
+
+      <div className="mt-4 flex flex-wrap gap-4 text-sm">
+        <button
+          type="button"
+          onClick={() => setMostrarTexto((v) => !v)}
+          className="text-[var(--color-texto-suave)]"
+        >
+          {mostrarTexto ? 'Ocultar texto' : 'Mostrar texto'}
+        </button>
+        {mensajes.length > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              tts.detener();
+              ultimoHabladoRef.current = null;
+              reiniciar();
+            }}
+            className="text-[var(--color-texto-suave)]"
+          >
+            Nueva conversación
+          </button>
+        )}
+      </div>
+
+      <ModalCrisis abierto={crisis.activa} onCerrar={reconocerCrisis} />
+    </section>
+  );
+}

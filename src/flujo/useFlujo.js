@@ -1,0 +1,258 @@
+// Orquestador de la SESION EXPRES (PRD §16): la fuente abre, la app conduce.
+//
+// Algoritmo "de la fuente a la practica":
+//   0. Verifica la fuente activa y obtiene su GUION (cache -> generar -> respaldo).
+//   APERTURA  la UI muestra la esencia de la fuente + su pregunta de apertura.
+//   Turno 1   la persona responde -> la IA elige UN eje y hace su 1a pregunta.
+//   Turno 2   la persona responde -> 2a pregunta concreta del eje.
+//   Turno 3   la persona responde -> practica personalizada + cierre + meditacion.
+// Total: ~4 intercambios. La seguridad envuelve cada entrada; en crisis 'alto'
+// se detiene el flujo y se prioriza contencion (PRD §2.2).
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { enviarMensaje } from '../ia/cliente.js';
+import { componerSistema } from '../ia/prompts.js';
+import { LENTE_ACTIVA } from '../fuentes/lente.js';
+import { fuenteActiva } from '../fuentes/registro.js';
+import { detectarSenalesCrisis } from '../seguridad/crisis.js';
+import { obtenerGuion } from './guion.js';
+import {
+  BREVEDAD,
+  MAX_TOKENS_EXPRES,
+  ESFUERZO_EXPRES,
+  directorElegirEje,
+  directorConcretar,
+  directorPractica,
+} from './etapas.js';
+
+function nuevoId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function crearMensaje(rol, contenido) {
+  return { id: nuevoId(), rol, contenido, ts: Date.now() };
+}
+
+// Mapea el hilo al formato del proxy, fusionando turnos consecutivos del mismo rol.
+function paraCliente(mensajes) {
+  const salida = [];
+  for (const m of mensajes) {
+    if (m.rol !== 'usuario' && m.rol !== 'asistente') continue;
+    const ultimo = salida[salida.length - 1];
+    if (ultimo && ultimo.rol === m.rol) {
+      ultimo.contenido += '\n\n' + m.contenido;
+    } else {
+      salida.push({ rol: m.rol, contenido: m.contenido });
+    }
+  }
+  return salida;
+}
+
+// Extrae el marcador "EJE: <id>" de la primera linea de la respuesta.
+function separarEje(texto, ejes) {
+  const m = texto.match(/^\s*EJE:\s*([a-z0-9-]+)\s*\n?/i);
+  if (!m) return { ejeId: null, contenido: texto.trim() };
+  const id = m[1].toLowerCase();
+  const existe = ejes.some((e) => e.id === id);
+  return {
+    ejeId: existe ? id : null,
+    contenido: texto.slice(m[0].length).trim(),
+  };
+}
+
+// Separa la meditacion final marcada con "MEDITACION:".
+function separarMeditacion(texto) {
+  const re = /MEDITACI[ÓO]N\s*:/i;
+  const encontrada = texto.match(re);
+  if (!encontrada) return { cierre: texto.trim(), meditacion: '' };
+  return {
+    cierre: texto.slice(0, encontrada.index).trim(),
+    meditacion: texto.slice(encontrada.index + encontrada[0].length).trim(),
+  };
+}
+
+// Persistencia local-first al cerrar (no rompe si falla).
+async function persistirSesion(idConversacion, mensajes, tituloEje) {
+  try {
+    const db = await import('../datos/db.js');
+    if (typeof db.put !== 'function' || !db.STORES) return;
+    const ahora = new Date().toISOString();
+    await db.put(db.STORES.CONVERSACIONES, {
+      id: idConversacion,
+      titulo: tituloEje ? `Sesión exprés — ${tituloEje}` : 'Sesión exprés',
+      mensajes: mensajes.map((m) => ({
+        rol: m.rol,
+        contenido: m.contenido,
+        creadoEn: new Date(m.ts).toISOString(),
+      })),
+      creadaEn: ahora,
+      actualizadaEn: ahora,
+    });
+  } catch {
+    /* sin persistencia disponible */
+  }
+}
+
+/**
+ * Hook de la sesion expres.
+ */
+export function useFlujo() {
+  const [guion, setGuion] = useState(null);
+  const [origenGuion, setOrigenGuion] = useState(null); // cache | generado | respaldo
+  const [cargandoGuion, setCargandoGuion] = useState(true);
+
+  const [etapa, setEtapa] = useState('apertura'); // apertura -> resonar -> concretar -> cerrada
+  const [mensajes, setMensajes] = useState([]);
+  const [cargando, setCargando] = useState(false);
+  const [error, setError] = useState(null);
+  const [crisis, setCrisis] = useState({ activa: false, nivel: 'ninguno', coincidencias: [] });
+  const [meditacion, setMeditacion] = useState('');
+  const [ejeId, setEjeId] = useState(null);
+
+  const idRef = useRef(nuevoId());
+  const fuente = fuenteActiva();
+
+  // 0) Verificar la fuente activa y obtener su guion. Si la fuente cambia
+  // (id nuevo), este efecto trae el guion nuevo: el flujo se reconfigura solo.
+  useEffect(() => {
+    let vivo = true;
+    setCargandoGuion(true);
+    obtenerGuion(fuente).then(({ guion: g, origen }) => {
+      if (!vivo) return;
+      setGuion(g);
+      setOrigenGuion(origen);
+      setCargandoGuion(false);
+    });
+    return () => {
+      vivo = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fuente?.id]);
+
+  const reconocerCrisis = useCallback(() => {
+    setCrisis((c) => ({ ...c, activa: false }));
+  }, []);
+
+  const reiniciar = useCallback(() => {
+    idRef.current = nuevoId();
+    setEtapa('apertura');
+    setMensajes([]);
+    setError(null);
+    setMeditacion('');
+    setEjeId(null);
+    setCrisis({ activa: false, nivel: 'ninguno', coincidencias: [] });
+  }, []);
+
+  const enviar = useCallback(
+    async (texto) => {
+      const contenido = (texto || '').trim();
+      if (!contenido || cargando || cargandoGuion || !guion || etapa === 'cerrada') return;
+
+      setError(null);
+
+      // Seguridad primero: evaluar la entrada.
+      const senal = detectarSenalesCrisis(contenido);
+      const msjUsuario = crearMensaje('usuario', contenido);
+      const hilo = await new Promise((resolve) => {
+        setMensajes((prev) => {
+          const siguiente = [...prev, msjUsuario];
+          resolve(siguiente);
+          return siguiente;
+        });
+      });
+
+      if (senal.nivel === 'alto') {
+        // Contener y derivar; NO se continua el flujo (no reforzar).
+        setCrisis({ activa: true, nivel: 'alto', coincidencias: senal.coincidencias || [] });
+        return;
+      }
+      if (senal.nivel === 'atencion') {
+        setCrisis((c) => ({ ...c, nivel: 'atencion', coincidencias: senal.coincidencias || [] }));
+      }
+
+      // Director segun la etapa del algoritmo.
+      const ejeActual = guion.ejes.find((e) => e.id === ejeId) || guion.ejes[0];
+      let director;
+      let siguiente;
+      if (etapa === 'apertura') {
+        director = directorElegirEje(guion);
+        siguiente = 'resonar';
+      } else if (etapa === 'resonar') {
+        director = directorConcretar(ejeActual);
+        siguiente = 'concretar';
+      } else {
+        director = directorPractica(ejeActual);
+        siguiente = 'cerrada';
+      }
+
+      const sistema =
+        componerSistema({ lente: LENTE_ACTIVA }) + '\n\n' + BREVEDAD + '\n\n' + director;
+
+      setCargando(true);
+      try {
+        const { texto: respuesta } = await enviarMensaje({
+          mensajes: paraCliente(hilo),
+          sistema,
+          maxTokens: MAX_TOKENS_EXPRES,
+          esfuerzo: ESFUERZO_EXPRES,
+        });
+
+        let contenidoAsistente = respuesta;
+
+        // Turno 1: capturar el eje elegido y limpiar el marcador.
+        if (etapa === 'apertura') {
+          const { ejeId: id, contenido: limpio } = separarEje(respuesta, guion.ejes);
+          setEjeId(id || guion.ejes[0].id);
+          contenidoAsistente = limpio;
+        }
+
+        // Turno final: separar la meditacion del cierre.
+        if (siguiente === 'cerrada') {
+          const { cierre, meditacion: med } = separarMeditacion(contenidoAsistente);
+          contenidoAsistente = cierre || contenidoAsistente;
+          if (med) setMeditacion(med);
+        }
+
+        const msjAsistente = crearMensaje('asistente', contenidoAsistente);
+        const hiloFinal = await new Promise((resolve) => {
+          setMensajes((prev) => {
+            const siguiente2 = [...prev, msjAsistente];
+            resolve(siguiente2);
+            return siguiente2;
+          });
+        });
+
+        setEtapa(siguiente);
+        if (siguiente === 'cerrada') {
+          const tituloEje = (guion.ejes.find((e) => e.id === (ejeId || guion.ejes[0].id)) || {})
+            .titulo;
+          persistirSesion(idRef.current, hiloFinal, tituloEje);
+        }
+      } catch (err) {
+        if (!(err && err.name === 'AbortError')) setError(err);
+      } finally {
+        setCargando(false);
+      }
+    },
+    [cargando, cargandoGuion, guion, etapa, ejeId]
+  );
+
+  const eje = guion?.ejes.find((e) => e.id === ejeId) || null;
+
+  return {
+    fuente,
+    guion,
+    origenGuion,
+    cargandoGuion,
+    etapa,
+    eje,
+    mensajes,
+    cargando,
+    error,
+    crisis,
+    meditacion,
+    enviar,
+    reconocerCrisis,
+    reiniciar,
+  };
+}
