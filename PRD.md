@@ -8,6 +8,7 @@
 | **Fecha** | 2026-07-08 |
 | **Estado** | Andamiaje construido y verificado (`npm run build` OK) · Entrevista (Fase 0) pendiente de retomar |
 | **Autores** | Ernesto Ramírez — psicólogo, dirección clínica y creativa · Claude — socio de diseño y desarrollo |
+| **Repositorio** | https://github.com/MetaNetMx/sintonia (público, para auditoría externa) |
 | **Idioma del producto** | Español (es-MX) en código y UI |
 
 ---
@@ -163,9 +164,10 @@ No se avanza de fase sin cerrar la anterior con Ernesto.
 - **Nombre provisional:** `Sintonía` (constante `NOMBRE_APP` en `src/config/app.js`). Se cambia en un solo lugar.
 - **Modelo IA por defecto:** `claude-sonnet-5` (configurable por `ANTHROPIC_MODEL`; lista blanca en `api/_lib/config.js`).
 
+**Decidida (v0.6):** **Repositorio propio:** `terapia/` tiene su propio repo git publicado en **https://github.com/MetaNetMx/sintonia** (público, para auditoría por IAs externas). El transcriptor sigue en su repo aparte.
+
 **Abiertas:**
 - **Nombre definitivo** del producto.
-- **Estrategia de repositorio/deploy:** ¿`terapia/` se separa a su propio repo git, o se queda como subcarpeta (monorepo) del transcriptor? *(El transcriptor puede reutilizarse para ingerir fuentes de YouTube.)*
 - **Concepto de producto** (pendiente de Fase 0/1): la apuesta creativa concreta.
 - **Alcance del primer incremento con fuente real.**
 
