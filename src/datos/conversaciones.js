@@ -15,6 +15,46 @@ function nuevoId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+// Acepta mensajes en la forma del store ({rol, contenido, creadoEn}) o en la
+// forma interna de los hooks ({rol, contenido, ts}) y los normaliza.
+function normalizarMensajes(mensajes = []) {
+  return mensajes
+    .filter((m) => m && (m.rol === 'usuario' || m.rol === 'asistente'))
+    .map((m) => ({
+      rol: m.rol,
+      contenido: m.contenido,
+      creadoEn:
+        m.creadoEn || (m.ts ? new Date(m.ts).toISOString() : new Date().toISOString()),
+    }));
+}
+
+/**
+ * Guarda (crea o actualiza) una conversacion COMPLETA por id: upsert.
+ * Es el punto de persistencia que usan los hooks de chat/flujo (corrige el
+ * hallazgo P2 de la auditoria: antes el hook caia en crearConversacion, que
+ * ignoraba id y mensajes y sembraba conversaciones vacias).
+ *
+ * @param {object} datos
+ * @param {string} datos.id        Id estable de la conversacion.
+ * @param {string} [datos.titulo]  Titulo (conserva el previo si se omite).
+ * @param {Array}  [datos.mensajes] Hilo completo (reemplaza el anterior).
+ * @returns {Promise<object>} La conversacion persistida.
+ */
+export async function guardarConversacion({ id, titulo, mensajes } = {}) {
+  if (!id) throw new Error('Falta el id de la conversacion.');
+  const previa = await get(STORES.CONVERSACIONES, id);
+  const ahora = new Date().toISOString();
+  const conversacion = {
+    id,
+    titulo: titulo || previa?.titulo || 'Conversación',
+    mensajes: normalizarMensajes(mensajes ?? previa?.mensajes ?? []),
+    creadaEn: previa?.creadaEn ?? ahora,
+    actualizadaEn: ahora,
+  };
+  await put(STORES.CONVERSACIONES, conversacion);
+  return conversacion;
+}
+
 /**
  * Crea una conversacion nueva (vacia) y la persiste.
  * @param {object} [opciones]

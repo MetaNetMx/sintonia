@@ -14,6 +14,7 @@ import {
   responderJSON,
   responderError,
   leerBodyJSON,
+  permitirPeticion,
 } from './_lib/config.js';
 
 const MAX_DESTILADO = 100_000; // caracteres
@@ -88,6 +89,7 @@ export default async function handler(req, res) {
     return responderError(res, 403, 'Origen no autorizado');
   }
   if (!validarMetodo(req, res, ['POST'])) return;
+  if (!permitirPeticion(req, res, { ambito: 'guion', max: 5 })) return;
 
   if (!ANTHROPIC_API_KEY) {
     return responderError(res, 500, 'Servicio de IA no configurado');

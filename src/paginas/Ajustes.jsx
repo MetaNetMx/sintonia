@@ -37,13 +37,23 @@ export default function Ajustes() {
 
   const borrarDatosVoz = async () => {
     const seguro = window.confirm(
-      'Esto revocará tu consentimiento y borrará tus datos de voz. ¿Continuar?'
+      'Esto revocará tu consentimiento y borrará tus datos de voz (también la voz clonada en el proveedor, si existe). ¿Continuar?'
     );
     if (!seguro) return;
     setOcupado(true);
     try {
-      await borrarVoz({ confirmado: true });
-      setMensaje('Se borraron tus datos de voz y se revocó el consentimiento.');
+      const resultado = await borrarVoz({ confirmado: true });
+      if (resultado.borrado) {
+        setMensaje(
+          resultado.remoto === 'ok'
+            ? 'Se borraron tus datos de voz, incluida la voz clonada en el proveedor.'
+            : 'Se borraron tus datos de voz y se revocó el consentimiento.'
+        );
+      } else {
+        setMensaje(
+          'No se pudo borrar la voz en el proveedor. Tus datos locales se conservaron para poder reintentar; vuelve a intentarlo en un momento.'
+        );
+      }
     } finally {
       setOcupado(false);
     }
@@ -55,6 +65,11 @@ export default function Ajustes() {
       <p className="mt-2 max-w-prose text-[var(--color-texto-suave)]">
         Tus datos son tuyos. Viven en este dispositivo y puedes llevártelos o
         borrarlos cuando quieras.
+      </p>
+      <p className="mt-3 max-w-prose text-sm text-[var(--color-texto-tenue)]">
+        Transparencia: por ahora tus datos se guardan <strong>sin cifrar</strong> en
+        el almacenamiento de este navegador. Si usas un equipo compartido,
+        exporta y borra tus datos al terminar.
       </p>
 
       <div className="mt-8 flex flex-col gap-4">

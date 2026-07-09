@@ -19,6 +19,7 @@ import {
   responderJSON,
   responderError,
   leerBodyJSON,
+  permitirPeticion,
 } from './_lib/config.js';
 
 // Limite defensivo de mensajes para evitar payloads abusivos.
@@ -31,12 +32,18 @@ const MAX_TEXTO_SALIDA = 1024;
 const MARGEN_RAZONAMIENTO = 3072;
 // Niveles de esfuerzo de razonamiento que el cliente puede pedir.
 const ESFUERZOS_PERMITIDOS = ['low', 'medium', 'high'];
+// Limites de tamano de entrada (caracteres) para proteger costos y la key
+// (hallazgo P1 de la auditoria externa: sin esto, un abusador podria mandar
+// payloads enormes y quemar la cuota).
+const MAX_CARACTERES_ENTRADA = 60_000;
+const MAX_CARACTERES_SISTEMA = 30_000;
 
 export default async function handler(req, res) {
   if (!aplicarCorsMismoOrigen(req, res)) {
     return responderError(res, 403, 'Origen no autorizado');
   }
   if (!validarMetodo(req, res, ['POST'])) return;
+  if (!permitirPeticion(req, res, { ambito: 'anthropic', max: 20 })) return;
 
   // La key es server-side: si falta, es un error de configuracion del servidor.
   if (!ANTHROPIC_API_KEY) {
@@ -79,9 +86,18 @@ export default async function handler(req, res) {
     mensajesLimpios.push({ role: rol, content: contenido });
   }
 
+  // Limite de tamano total de la entrada (mensajes + sistema).
+  const totalCaracteres = mensajesLimpios.reduce((suma, m) => suma + m.content.length, 0);
+  if (totalCaracteres > MAX_CARACTERES_ENTRADA) {
+    return responderError(res, 413, 'La conversacion excede el limite de entrada permitido');
+  }
+
   // El system prompt es opcional a nivel de transporte, pero el cliente debe
   // enviarlo siempre (ver prompts.js). Se acepta solo texto.
   const systemPrompt = typeof sistema === 'string' ? sistema : undefined;
+  if (systemPrompt && systemPrompt.length > MAX_CARACTERES_SISTEMA) {
+    return responderError(res, 413, 'El system prompt excede el limite permitido');
+  }
 
   // El cliente no puede imponer un modelo arbitrario: solo lista blanca.
   const modeloFinal = resolverModelo(modelo);

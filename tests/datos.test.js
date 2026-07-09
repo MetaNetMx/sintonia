@@ -1,0 +1,94 @@
+// Contratos de persistencia local-first (PRD §7) sobre IndexedDB simulado.
+// Cubre los hallazgos P1 (consentimiento con id estable) y P2 (upsert de
+// conversaciones) de la auditoria externa 2026-07-08.
+import 'fake-indexeddb/auto';
+import { describe, it, expect } from 'vitest';
+import {
+  guardarConversacion,
+  leerConversacion,
+  listarConversaciones,
+} from '../src/datos/conversaciones.js';
+import {
+  guardarConsentimientoVoz,
+  leerConsentimientoVoz,
+  asignarVoiceId,
+  revocarConsentimientoVoz,
+} from '../src/datos/consentimientos.js';
+import { borrarTodo } from '../src/datos/borrar.js';
+
+describe('consentimiento de voz (P1)', () => {
+  it('persiste con id estable y se puede leer de vuelta', async () => {
+    const registro = await guardarConsentimientoVoz({ casillas: { biometrico: true } });
+    expect(registro.id).toBe('voz');
+    const leido = await leerConsentimientoVoz();
+    expect(leido).toBeDefined();
+    expect(leido.otorgado).toBe(true);
+    expect(leido.casillas.biometrico).toBe(true);
+    expect(leido.voiceId).toBeNull();
+  });
+
+  it('asigna el voiceId de la voz clonada al consentimiento', async () => {
+    await guardarConsentimientoVoz({});
+    await asignarVoiceId('abc123XYZ');
+    const leido = await leerConsentimientoVoz();
+    expect(leido.voiceId).toBe('abc123XYZ');
+  });
+
+  it('asignarVoiceId falla si no hay consentimiento (no se clona sin consentir)', async () => {
+    await revocarConsentimientoVoz();
+    await expect(asignarVoiceId('otro')).rejects.toThrow();
+  });
+});
+
+describe('conversaciones (P2): upsert real', () => {
+  it('crea y luego actualiza conservando creadaEn', async () => {
+    const creada = await guardarConversacion({
+      id: 'c1',
+      titulo: 'Prueba',
+      mensajes: [{ rol: 'usuario', contenido: 'hola', ts: Date.now() }],
+    });
+    expect(creada.mensajes).toHaveLength(1);
+    expect(creada.mensajes[0].creadoEn).toBeTruthy();
+
+    const actualizada = await guardarConversacion({
+      id: 'c1',
+      mensajes: [
+        { rol: 'usuario', contenido: 'hola', ts: Date.now() },
+        { rol: 'asistente', contenido: 'te escucho', ts: Date.now() },
+      ],
+    });
+    expect(actualizada.creadaEn).toBe(creada.creadaEn);
+    expect(actualizada.titulo).toBe('Prueba'); // conserva el titulo previo
+    expect(actualizada.mensajes).toHaveLength(2);
+
+    const leida = await leerConversacion('c1');
+    expect(leida.mensajes).toHaveLength(2);
+  });
+
+  it('exige id (no siembra conversaciones huerfanas)', async () => {
+    await expect(guardarConversacion({ mensajes: [] })).rejects.toThrow();
+  });
+
+  it('filtra mensajes con roles invalidos', async () => {
+    const c = await guardarConversacion({
+      id: 'c2',
+      mensajes: [{ rol: 'sistema', contenido: 'x' }, { rol: 'usuario', contenido: 'ok' }],
+    });
+    expect(c.mensajes).toHaveLength(1);
+  });
+});
+
+describe('borrado (PRD §7): guardas de confirmacion', () => {
+  it('borrarTodo no borra sin confirmacion explicita', async () => {
+    await guardarConversacion({ id: 'c3', mensajes: [] });
+    const resultado = await borrarTodo({});
+    expect(resultado.borrado).toBe(false);
+    expect(await leerConversacion('c3')).toBeDefined();
+  });
+
+  it('borrarTodo borra con confirmacion', async () => {
+    const resultado = await borrarTodo({ confirmado: true });
+    expect(resultado.borrado).toBe(true);
+    expect(await listarConversaciones()).toHaveLength(0);
+  });
+});

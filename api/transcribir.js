@@ -12,6 +12,7 @@ import {
   responderJSON,
   responderError,
   leerBodyJSON,
+  permitirPeticion,
 } from './_lib/config.js';
 
 const STT_URL = 'https://api.elevenlabs.io/v1/speech-to-text';
@@ -23,6 +24,7 @@ export default async function handler(req, res) {
     return responderError(res, 403, 'Origen no autorizado');
   }
   if (!validarMetodo(req, res, ['POST'])) return;
+  if (!permitirPeticion(req, res, { ambito: 'transcribir', max: 20 })) return;
 
   // Sin key -> transcripcion no disponible (el cliente lo maneja con un aviso).
   if (!ELEVENLABS_API_KEY) {

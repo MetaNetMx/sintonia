@@ -71,22 +71,14 @@ function separarMeditacion(texto) {
   };
 }
 
-// Persistencia local-first al cerrar (no rompe si falla).
+// Persistencia local-first al cerrar (upsert unificado; no rompe si falla).
 async function persistirSesion(idConversacion, mensajes, tituloEje) {
   try {
-    const db = await import('../datos/db.js');
-    if (typeof db.put !== 'function' || !db.STORES) return;
-    const ahora = new Date().toISOString();
-    await db.put(db.STORES.CONVERSACIONES, {
+    const mod = await import('../datos/conversaciones.js');
+    await mod.guardarConversacion({
       id: idConversacion,
       titulo: tituloEje ? `Sesión exprés — ${tituloEje}` : 'Sesión exprés',
-      mensajes: mensajes.map((m) => ({
-        rol: m.rol,
-        contenido: m.contenido,
-        creadoEn: new Date(m.ts).toISOString(),
-      })),
-      creadaEn: ahora,
-      actualizadaEn: ahora,
+      mensajes,
     });
   } catch {
     /* sin persistencia disponible */

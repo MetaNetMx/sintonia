@@ -4,15 +4,38 @@
 
 import { CONFIG } from '../config/app.js';
 
+// Limite total de audio crudo por peticion. El proxy recibe JSON base64
+// (~+33% de tamano) y las plataformas serverless limitan el cuerpo (~4.5 MB
+// en Vercel), asi que acotamos aqui con margen.
+const MAX_BYTES_TOTAL = 3 * 1024 * 1024;
+
+// Convierte un Blob a base64 (sin el prefijo "data:...;base64,").
+function blobABase64(blob) {
+  return new Promise((resolve, reject) => {
+    const lector = new FileReader();
+    lector.onerror = () => reject(new Error('No se pudo leer la grabacion.'));
+    lector.onloadend = () => {
+      const resultado = String(lector.result || '');
+      const coma = resultado.indexOf(',');
+      resolve(coma >= 0 ? resultado.slice(coma + 1) : resultado);
+    };
+    lector.readAsDataURL(blob);
+  });
+}
+
 /**
  * Envia muestras de audio al proxy para crear una voz clonada.
- * El cliente nunca ve la key: solo llama /api/voz-clonar.
+ * Contrato UNIFICADO con api/voz-clonar.js (hallazgo P2 de la auditoria):
+ * JSON con muestras en base64 y consentimiento explicito.
+ *
+ * REQUISITO ETICO: verifica el consentimiento biometrico persistido ANTES de
+ * enviar nada. Sin registro de consentimiento, no se clona.
  *
  * @param {Object} params
  * @param {Blob[]} params.muestras  Grabaciones de la voz de la persona.
  * @param {string} params.nombre    Nombre para identificar la voz.
  * @returns {Promise<{ voiceId: string }>}
- * @throws {Error} Si faltan datos o el proxy responde con error.
+ * @throws {Error} Si falta consentimiento, datos, o el proxy responde error.
  */
 export async function clonarVoz({ muestras, nombre }) {
   if (!muestras || muestras.length === 0) {
@@ -22,18 +45,34 @@ export async function clonarVoz({ muestras, nombre }) {
     throw new Error('Falta el nombre para la voz clonada.');
   }
 
-  const formulario = new FormData();
-  formulario.append('nombre', nombre);
-  muestras.forEach((muestra, i) => {
-    const ext = (muestra.type && muestra.type.split('/')[1]) || 'webm';
-    formulario.append('muestras', muestra, `muestra-${i + 1}.${ext}`);
-  });
+  // 1) Verificar el consentimiento persistido (dato biometrico, PRD §6).
+  const consentimientos = await import('../datos/consentimientos.js');
+  const consentimiento = await consentimientos.leerConsentimientoVoz();
+  if (!consentimiento || consentimiento.otorgado !== true) {
+    throw new Error('Falta el consentimiento explícito para clonar la voz.');
+  }
+
+  // 2) Validar tamano total antes de codificar.
+  const totalBytes = muestras.reduce((suma, m) => suma + (m?.size || 0), 0);
+  if (totalBytes > MAX_BYTES_TOTAL) {
+    throw new Error('Las grabaciones superan el tamaño máximo permitido; graba muestras más cortas.');
+  }
+
+  // 3) Codificar a base64 (contrato JSON del proxy).
+  const carga = await Promise.all(
+    muestras.map(async (muestra, i) => ({
+      nombreArchivo: `muestra-${i + 1}.${(muestra.type || 'audio/webm').split('/')[1].split(';')[0]}`,
+      tipo: muestra.type || 'audio/webm',
+      datosBase64: await blobABase64(muestra),
+    }))
+  );
 
   let respuesta;
   try {
     respuesta = await fetch(CONFIG.endpoints.clonarVoz, {
       method: 'POST',
-      body: formulario, // El navegador arma el Content-Type multipart con boundary.
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombre: nombre.trim(), consentimiento: true, muestras: carga }),
     });
   } catch (error) {
     throw new Error(`No se pudo contactar el servicio de clonacion: ${error.message}`);
@@ -54,6 +93,11 @@ export async function clonarVoz({ muestras, nombre }) {
   if (!datos || !datos.voiceId) {
     throw new Error('El servicio no devolvio un identificador de voz.');
   }
+
+  // 4) Asociar el voiceId al consentimiento: imprescindible para poder borrar
+  // la voz tambien en el proveedor al revocar (PRD §6).
+  await consentimientos.asignarVoiceId(datos.voiceId);
+
   return { voiceId: datos.voiceId };
 }
 

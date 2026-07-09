@@ -7,20 +7,21 @@ import { useState } from 'react';
 import { NOMBRE_APP } from '../config/app.js';
 
 /**
- * Guarda el consentimiento en el almacen local sin romper si src/datos aun no existe.
- * Usa import dinamico y asume la firma del contrato (abrirDB + store 'consentimientos').
- * @param {Object} registro
+ * Persiste el consentimiento con id estable via src/datos/consentimientos.js.
+ * Devuelve true solo si quedo REALMENTE guardado; si falla, el flujo NO debe
+ * continuar como si hubiera consentimiento (hallazgo P1 de la auditoria:
+ * antes el error se tragaba y la UI afirmaba un consentimiento inexistente).
+ * @param {Record<string, boolean>} casillas
+ * @returns {Promise<boolean>}
  */
-async function guardarConsentimiento(registro) {
+async function guardarConsentimiento(casillas) {
   try {
-    const modulo = await import('../datos/db.js');
-    if (typeof modulo.abrirDB !== 'function') return;
-    const db = await modulo.abrirDB();
-    // El contrato define el store 'consentimientos'. Escribimos de forma tolerante.
-    await db.put('consentimientos', registro);
-  } catch {
-    // Si el modulo de datos aun no esta disponible, no bloqueamos la experiencia.
-    // La capa que consume onAceptar puede persistir por su cuenta.
+    const modulo = await import('../datos/consentimientos.js');
+    await modulo.guardarConsentimientoVoz({ casillas });
+    return true;
+  } catch (error) {
+    console.error('[consentimiento-voz] no se pudo persistir:', error?.name || error);
+    return false;
   }
 }
 
@@ -47,6 +48,7 @@ const CASILLAS = [
 export default function ConsentimientoVoz({ onAceptar, onRechazar }) {
   const [marcadas, setMarcadas] = useState({});
   const [guardando, setGuardando] = useState(false);
+  const [errorGuardado, setErrorGuardado] = useState('');
 
   const todasMarcadas = CASILLAS.every((c) => marcadas[c.id]);
 
@@ -57,16 +59,21 @@ export default function ConsentimientoVoz({ onAceptar, onRechazar }) {
   const aceptar = async () => {
     if (!todasMarcadas || guardando) return;
     setGuardando(true);
-    const registro = {
-      tipo: 'voz',
-      otorgado: true,
-      fecha: new Date().toISOString(),
-      casillas: { ...marcadas },
-    };
-    await guardarConsentimiento(registro);
+    setErrorGuardado('');
+
+    // Sin evidencia persistida NO hay consentimiento: si falla el guardado,
+    // se detiene aqui y se pide reintentar.
+    const persistido = await guardarConsentimiento({ ...marcadas });
     setGuardando(false);
+    if (!persistido) {
+      setErrorGuardado(
+        'No pudimos registrar tu consentimiento en este dispositivo, así que no continuamos. Intenta de nuevo.'
+      );
+      return;
+    }
+
     if (typeof onAceptar === 'function') {
-      onAceptar({ fecha: registro.fecha, casillas: registro.casillas });
+      onAceptar({ fecha: new Date().toISOString(), casillas: { ...marcadas } });
     }
   };
 
@@ -154,6 +161,12 @@ export default function ConsentimientoVoz({ onAceptar, onRechazar }) {
           Ahora no
         </button>
       </div>
+
+      {errorGuardado && (
+        <p role="alert" className="mt-4 text-sm text-[var(--color-texto)]">
+          {errorGuardado}
+        </p>
+      )}
 
       <p className="mt-4 text-sm text-[var(--color-texto-tenue)]">
         Puedes revocar este consentimiento en cualquier momento. Tu decision es reversible.

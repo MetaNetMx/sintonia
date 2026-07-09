@@ -12,6 +12,7 @@ export const CONFIG = {
     transcribir: '/api/transcribir',
     voces: '/api/voces',
     clonarVoz: '/api/voz-clonar',
+    borrarVoz: '/api/voz-borrar',
   },
   flags: {
     vozHabilitada: true,

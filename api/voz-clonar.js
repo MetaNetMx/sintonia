@@ -40,6 +40,7 @@ import {
   responderJSON,
   responderError,
   leerBodyJSON,
+  permitirPeticion,
 } from './_lib/config.js';
 
 const ELEVENLABS_ADD_URL = 'https://api.elevenlabs.io/v1/voices/add';
@@ -51,6 +52,7 @@ export default async function handler(req, res) {
     return responderError(res, 403, 'Origen no autorizado');
   }
   if (!validarMetodo(req, res, ['POST'])) return;
+  if (!permitirPeticion(req, res, { ambito: 'voz-clonar', max: 3 })) return;
 
   if (!ELEVENLABS_API_KEY) {
     return responderError(res, 503, 'Clonacion de voz no disponible', 'sin_configuracion');

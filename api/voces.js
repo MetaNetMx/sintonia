@@ -9,6 +9,7 @@ import {
   validarMetodo,
   responderJSON,
   responderError,
+  permitirPeticion,
 } from './_lib/config.js';
 
 const VOCES_URL = 'https://api.elevenlabs.io/v1/voices';
@@ -18,6 +19,7 @@ export default async function handler(req, res) {
     return responderError(res, 403, 'Origen no autorizado');
   }
   if (!validarMetodo(req, res, ['GET'])) return;
+  if (!permitirPeticion(req, res, { ambito: 'voces', max: 30 })) return;
 
   if (!ELEVENLABS_API_KEY) {
     return responderError(res, 503, 'Voces no disponibles', 'sin_configuracion');

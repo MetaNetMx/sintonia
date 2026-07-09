@@ -82,6 +82,61 @@ export function responderError(res, status, mensaje, detalle) {
   return responderJSON(res, status, cuerpo);
 }
 
+// --- Limite de peticiones (rate limiting) ---
+// Limitador en memoria por IP y por endpoint. HONESTIDAD TECNICA: en serverless
+// cada instancia tiene su propia memoria, asi que esto es "mejor esfuerzo"; no
+// sustituye un WAF / rate limiting de plataforma (p. ej. Vercel Firewall) ni
+// autenticacion. Mitiga abuso casual y bucles accidentales que quemarian las
+// claves (hallazgo P1 de la auditoria externa 2026-07-08).
+
+const ventanas = new Map(); // clave "ambito:ip" -> { inicio, cuenta }
+const MAX_ENTRADAS_VENTANAS = 10_000;
+
+function ipDePeticion(req) {
+  const reenviada = req.headers['x-forwarded-for'];
+  if (typeof reenviada === 'string' && reenviada.length) {
+    return reenviada.split(',')[0].trim();
+  }
+  return req.socket?.remoteAddress || 'desconocida';
+}
+
+/**
+ * Permite o rechaza la peticion segun una ventana deslizante por IP.
+ * Devuelve true si puede continuar; si no, responde 429 y devuelve false.
+ * @param {object} req
+ * @param {object} res
+ * @param {object} [opciones]
+ * @param {string} [opciones.ambito='global']  Nombre del endpoint.
+ * @param {number} [opciones.max=30]           Peticiones permitidas por ventana.
+ * @param {number} [opciones.ventanaMs=60000]  Duracion de la ventana.
+ */
+export function permitirPeticion(req, res, { ambito = 'global', max = 30, ventanaMs = 60_000 } = {}) {
+  const clave = `${ambito}:${ipDePeticion(req)}`;
+  const ahora = Date.now();
+
+  // Evita crecimiento sin limite del mapa en instancias longevas.
+  if (ventanas.size > MAX_ENTRADAS_VENTANAS) {
+    for (const [k, v] of ventanas) {
+      if (ahora - v.inicio >= ventanaMs) ventanas.delete(k);
+    }
+    if (ventanas.size > MAX_ENTRADAS_VENTANAS) ventanas.clear();
+  }
+
+  const ventana = ventanas.get(clave);
+  if (!ventana || ahora - ventana.inicio >= ventanaMs) {
+    ventanas.set(clave, { inicio: ahora, cuenta: 1 });
+    return true;
+  }
+
+  ventana.cuenta += 1;
+  if (ventana.cuenta > max) {
+    res.setHeader('Retry-After', String(Math.ceil((ventana.inicio + ventanaMs - ahora) / 1000)));
+    responderError(res, 429, 'Demasiadas peticiones; intenta de nuevo en un momento');
+    return false;
+  }
+  return true;
+}
+
 // Valida el metodo HTTP. Devuelve true si es valido; si no, responde 405 y false.
 // Maneja tambien el preflight OPTIONS (responde 204).
 export function validarMetodo(req, res, metodosPermitidos) {

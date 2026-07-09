@@ -26,19 +26,16 @@ function paraCliente(mensajes) {
     .map((m) => ({ rol: m.rol, contenido: m.contenido }));
 }
 
-// Persistencia opcional: si el modulo de conversaciones expone un guardado, lo usa.
-// Nunca rompe el chat si el modulo no existe o cambia de forma.
+// Persistencia local-first del hilo (upsert por id). Nunca rompe el chat si
+// IndexedDB no esta disponible: en ese caso la conversacion vive en memoria.
 async function persistir(conversacionId, mensajes) {
   try {
     const mod = await import('../datos/conversaciones.js');
-    const guardar =
-      mod.guardarConversacion ||
-      mod.actualizarConversacion ||
-      mod.crearConversacion ||
-      null;
-    if (typeof guardar === 'function') {
-      return await guardar({ id: conversacionId, mensajes });
-    }
+    await mod.guardarConversacion({
+      id: conversacionId,
+      titulo: 'Conversación por voz',
+      mensajes,
+    });
   } catch {
     /* sin persistencia disponible: se continua solo en memoria */
   }

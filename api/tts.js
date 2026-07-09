@@ -13,6 +13,7 @@ import {
   validarMetodo,
   responderError,
   leerBodyJSON,
+  permitirPeticion,
 } from './_lib/config.js';
 
 const ELEVENLABS_URL = 'https://api.elevenlabs.io/v1/text-to-speech';
@@ -81,6 +82,7 @@ export default async function handler(req, res) {
     return responderError(res, 403, 'Origen no autorizado');
   }
   if (!validarMetodo(req, res, ['POST'])) return;
+  if (!permitirPeticion(req, res, { ambito: 'tts', max: 30 })) return;
 
   // Sin key -> el cliente debe degradar a Web Speech.
   if (!ELEVENLABS_API_KEY) {

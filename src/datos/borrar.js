@@ -5,6 +5,7 @@
 // gesto de confirmacion explicito por parametro para evitar borrados accidentales.
 
 import { LISTA_STORES, STORES, limpiarStore } from './db.js';
+import { CONFIG } from '../config/app.js';
 
 /**
  * Borra TODA la base de datos local: perfil, conversaciones, consentimientos,
@@ -31,30 +32,52 @@ export async function borrarTodo({ confirmado } = {}) {
 }
 
 /**
- * Borra unicamente los datos de VOZ (dato biometrico, PRD §6): consentimientos
- * de voz y las muestras de voz asociadas. Es la implementacion del derecho a
- * revocar el consentimiento de clonacion de voz. Operacion irreversible.
+ * Borra los datos de VOZ (dato biometrico, PRD §6): el consentimiento local Y
+ * la voz clonada en el PROVEEDOR (via /api/voz-borrar). Es la implementacion
+ * real del derecho a revocar (hallazgo P1 de la auditoria: antes solo se
+ * limpiaba IndexedDB y la voz seguia existiendo en ElevenLabs).
  *
- * Deja intactos perfil, conversaciones, fuentes y meditaciones (salvo el audio
- * clonado de estas ultimas, que no se persiste como muestra biometrica aqui).
+ * Si el borrado remoto FALLA, NO se borra el registro local (conserva el
+ * voiceId para poder reintentar) y se devuelve { borrado: false, remoto: 'fallo' }.
  *
  * La UI DEBE pedir confirmacion explicita y pasar { confirmado: true }.
  *
  * @param {object} opciones
  * @param {boolean} opciones.confirmado  Debe ser true (gesto de confirmacion de la UI).
- * @returns {Promise<{ borrado: boolean }>}
+ * @returns {Promise<{ borrado: boolean, remoto: 'ok'|'fallo'|'no_aplica' }>}
  */
 export async function borrarVoz({ confirmado } = {}) {
   if (confirmado !== true) {
-    return { borrado: false };
+    return { borrado: false, remoto: 'no_aplica' };
   }
 
-  // Los consentimientos de voz y las muestras biometricas viven en el store
-  // 'consentimientos'. Se limpia por completo ese store.
-  // TODO: si en el futuro 'consentimientos' guarda tambien consentimientos NO
-  // relacionados con la voz, filtrar aqui por tipo (index 'porTipo') en lugar
-  // de limpiar todo el store.
-  await limpiarStore(STORES.CONSENTIMIENTOS);
+  // 1) ¿Hay una voz clonada en el proveedor? (voiceId en el consentimiento)
+  let remoto = 'no_aplica';
+  try {
+    const consentimientos = await import('./consentimientos.js');
+    const registro = await consentimientos.leerConsentimientoVoz();
+    if (registro?.voiceId) {
+      try {
+        const respuesta = await fetch(CONFIG.endpoints.borrarVoz, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ voiceId: registro.voiceId }),
+        });
+        remoto = respuesta.ok ? 'ok' : 'fallo';
+      } catch {
+        remoto = 'fallo';
+      }
+    }
+  } catch {
+    /* sin registro local: solo limpieza local */
+  }
 
-  return { borrado: true };
+  // 2) Si el proveedor NO borro, conservamos el registro (y su voiceId) para
+  // poder reintentar: revocar debe ser verdad, no solo un mensaje en la UI.
+  if (remoto === 'fallo') {
+    return { borrado: false, remoto };
+  }
+
+  await limpiarStore(STORES.CONSENTIMIENTOS);
+  return { borrado: true, remoto };
 }
