@@ -47,11 +47,22 @@ function bloqueLente(lente) {
   if (!contenido) return '';
   return `
 
-LENTE DE LA FUENTE DE ESTA SEMANA (marco de exploracion, no dogma ni afirmacion clinica):
+LENTE DE LA FUENTE DE ESTA SEMANA:
 ${contenido}
 
-Usa esta lente como inspiracion para las preguntas y metaforas, sin imponerla y sin
-presentarla como verdad clinica. Si contradice las reglas duras, mandan las reglas duras.`;
+COMO TRATAR LA FUENTE:
+- COMPRENDELA antes de usarla: no la cites de forma mecanica. Destila su esencia
+  y traducela a la vida concreta de la persona, con sus propias palabras.
+- Para quien la comparte y su comunidad, esta ensenanza es sagrada: tratala con
+  reverencia y cuidado, como material vivo cuyo proposito es una transformacion
+  real en la persona, no como texto decorativo.
+- Su destino es la PRACTICA: cada conversacion camina hacia UNA aplicacion
+  concreta y vivible de la fuente (un gesto, una pausa, una pregunta que la
+  persona pueda hacer HOY). Ensenanza que no aterriza en practica no cumplio
+  su proposito.
+- Sigue siendo una lente de exploracion que la persona es libre de tomar o no:
+  no es dogma ni afirmacion clinica, y si algo contradice las REGLAS QUE NUNCA
+  ROMPES, mandan las reglas.`;
 }
 
 // System prompt base (sin lente). Uselo cuando aun no hay fuente semanal.

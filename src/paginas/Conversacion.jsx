@@ -1,26 +1,45 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAcompanamiento } from '../ia/useAcompanamiento.js';
 import { componerSistema } from '../ia/prompts.js';
 import { LENTE_ACTIVA } from '../fuentes/lente.js';
+import { fuenteActiva } from '../fuentes/registro.js';
+import { obtenerGuion } from '../flujo/guion.js';
+import { directorVoz } from '../flujo/etapas.js';
 import { iniciarGrabacion, soportaGrabacion } from '../voz/clonacion.js';
 import { transcribir } from '../voz/transcribir.js';
 import { listarVoces } from '../voz/voces.js';
 import { useTTS } from '../voz/useTTS.js';
 import ModalCrisis from '../seguridad/ModalCrisis.jsx';
 
-// Estilo de voz: respuestas breves y "hablables" (se van a escuchar).
-const DIRECTOR_VOZ = `ESTILO DE CONVERSACION POR VOZ: la persona te habla por notas de voz. Responde de forma breve y natural, como si hablaras en voz alta (2 a 4 frases), calido y cercano en espanol de Mexico. Una idea a la vez. Evita listas, vinetas y formato: tu respuesta se va a ESCUCHAR, no a leer. Cuando sea natural, cierra con una sola pregunta abierta.`;
+// Texto de salida acotado: respuestas hablables de 2-3 frases (el cierre con
+// practica necesita un poco mas). El proxy suma aparte el margen de razonamiento.
+const MAX_TOKENS_VOZ = 300;
 
 // Conversacion por voz (PRD §15): hablas por notas de voz (ElevenLabs Scribe) y
 // la app responde con voz natural (ElevenLabs). Misma lente + seguridad que la
-// Sesion. Requiere ELEVENLABS_API_KEY para voz/transcripcion; sin ella, avisa.
+// Sesion. La FUENTE dirige tambien aqui (decision de Ernesto, 2026-07-09): el
+// guion derivado de la fuente + un director por turno hacen la charla muy corta
+// y la aterrizan en UNA practica concreta (~3 turnos), en vez de chat abierto.
+// Requiere ELEVENLABS_API_KEY para voz/transcripcion; sin ella, avisa.
 export default function Conversacion() {
-  const sistema = useMemo(
-    () => componerSistema({ lente: LENTE_ACTIVA }) + '\n\n' + DIRECTOR_VOZ,
-    []
+  const [guion, setGuion] = useState(null);
+  useEffect(() => {
+    let vivo = true;
+    obtenerGuion(fuenteActiva()).then(({ guion: g }) => {
+      if (vivo) setGuion(g);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
+  const sistema = useCallback(
+    ({ turno }) =>
+      componerSistema({ lente: LENTE_ACTIVA }) + '\n\n' + directorVoz({ guion, turno }),
+    [guion]
   );
   const { mensajes, cargando, error, crisis, enviar, reconocerCrisis, reiniciar } =
-    useAcompanamiento({ sistema });
+    useAcompanamiento({ sistema, maxTokens: MAX_TOKENS_VOZ, esfuerzo: 'low' });
   const tts = useTTS();
 
   const [grabando, setGrabando] = useState(false);

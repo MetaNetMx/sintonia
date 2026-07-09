@@ -42,8 +42,11 @@ async function persistir(conversacionId, mensajes) {
   return conversacionId;
 }
 
-// useAcompanamiento({ sistema }) => API del chat
-export function useAcompanamiento({ sistema } = {}) {
+// useAcompanamiento({ sistema, maxTokens, esfuerzo }) => API del chat
+// `sistema` puede ser un string fijo o una funcion ({ turno }) => string, donde
+// turno = numero de intervenciones de la persona (1 = primera). Los directores
+// por turno permiten que el modo voz dirija la charla hacia algo concreto.
+export function useAcompanamiento({ sistema, maxTokens, esfuerzo } = {}) {
   const [mensajes, setMensajes] = useState([]);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState(null);
@@ -51,7 +54,6 @@ export function useAcompanamiento({ sistema } = {}) {
   const [crisis, setCrisis] = useState({ activa: false, nivel: 'ninguno', coincidencias: [] });
 
   const conversacionIdRef = useRef(nuevoId());
-  const sistemaBase = sistema || SISTEMA_ACOMPANAMIENTO;
 
   // Permite a la UI cerrar/reconocer la alerta de crisis sin borrar el hilo.
   const reconocerCrisis = useCallback(() => {
@@ -96,12 +98,18 @@ export function useAcompanamiento({ sistema } = {}) {
         setCrisis({ activa: false, nivel: 'atencion', coincidencias: senal.coincidencias || [] });
       }
 
-      // 3) Enviar a la IA por el proxy.
+      // 3) Enviar a la IA por el proxy, con el director del turno actual.
+      const turno = hiloConUsuario.filter((m) => m.rol === 'usuario').length;
+      const sistemaTurno =
+        typeof sistema === 'function' ? sistema({ turno }) : sistema || SISTEMA_ACOMPANAMIENTO;
+
       setCargando(true);
       try {
         const { texto: respuestaTexto } = await enviarMensaje({
           mensajes: paraCliente(hiloConUsuario),
-          sistema: sistemaBase,
+          sistema: sistemaTurno,
+          ...(maxTokens ? { maxTokens } : {}),
+          ...(esfuerzo ? { esfuerzo } : {}),
         });
 
         // 4) Evaluar senales de crisis tambien en la respuesta recibida.
@@ -132,7 +140,7 @@ export function useAcompanamiento({ sistema } = {}) {
         setCargando(false);
       }
     },
-    [cargando, sistemaBase]
+    [cargando, sistema, maxTokens, esfuerzo]
   );
 
   return {

@@ -8,6 +8,7 @@ import {
   directorElegirEje,
   directorConcretar,
   directorPractica,
+  directorVoz,
 } from '../src/flujo/etapas.js';
 import { GUION_RESPALDO } from '../src/flujo/guion.js';
 
@@ -37,5 +38,29 @@ describe('directores de la sesion expres', () => {
     expect(MAX_TOKENS_EXPRES).toBeGreaterThanOrEqual(200);
     expect(MAX_TOKENS_EXPRES).toBeLessThanOrEqual(1024);
     expect(ESFUERZO_EXPRES).toBe('low');
+  });
+});
+
+describe('directorVoz: la fuente dirige tambien la voz (decision 2026-07-09)', () => {
+  it('turno 1: recibe TODOS los ejes para comprenderlos y no anuncia el elegido', () => {
+    const d = directorVoz({ guion: GUION_RESPALDO, turno: 1 });
+    for (const eje of GUION_RESPALDO.ejes) {
+      expect(d, eje.id).toContain(eje.id);
+    }
+    expect(d).toMatch(/no anuncies el eje/i);
+    expect(d).toMatch(/2 o 3 frases/);
+  });
+
+  it('turno 3: cierra con LA practica del guion y sin mas preguntas', () => {
+    const d = directorVoz({ guion: GUION_RESPALDO, turno: 3 });
+    expect(d).toMatch(/CIERRE PRACTICO/);
+    expect(d).toMatch(/No hagas mas preguntas/);
+    expect(d).toContain(GUION_RESPALDO.ejes[0].practica.titulo);
+  });
+
+  it('sin guion no truena: degrada a escuchar y UNA pregunta concreta', () => {
+    const d = directorVoz({ guion: null, turno: 1 });
+    expect(d).toMatch(/UNA pregunta/);
+    expect(d).toMatch(/2 o 3 frases/);
   });
 });

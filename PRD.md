@@ -247,7 +247,7 @@ No se avanza de fase sin cerrar la anterior con Ernesto.
 - **Voz → texto (entrada):** notas de voz transcritas con **ElevenLabs Scribe** (`api/transcribir.js`, modelo `scribe_v2`; `scribe_v1` se depreca 2026-07-09). El cliente graba con `MediaRecorder` (`src/voz/clonacion.js`) y manda el audio en base64 al proxy.
 - **Texto → voz (salida):** **ElevenLabs** (`api/tts.js`, `eleven_multilingual_v2`, es-MX), que reemplaza la voz robótica de Web Speech. Voz por defecto de catálogo (override con `ELEVENLABS_VOICE_ID` o el selector de voz); respaldo a Web Speech si falla o no hay key.
 - **UI (`src/paginas/Conversacion.jsx`, ruta `/conversacion`):** burbujas estilo chat, botón de micrófono (grabar → enviar), reproducción automática de la respuesta, selector de voz (poblado por `api/voces.js`) y campo de texto de respaldo; se puede ocultar/mostrar el texto.
-- **Misma base ética:** reutiliza la **lente** filtrada y la **detección de crisis** (vía `useAcompanamiento`), con un director de estilo "hablado y breve".
+- **Misma base ética:** reutiliza la **lente** filtrada y la **detección de crisis** (vía `useAcompanamiento`), con un **director por turno derivado del guion de la fuente** (`directorVoz`, ver §16): charla muy corta que aterriza en una práctica.
 
 **Decisiones aplicadas (v0.4):** voz de salida = **voz ElevenLabs de catálogo por ahora** (clonar la de Ernesto queda como siguiente incremento, §13/deuda 1); transcripción = **ElevenLabs Scribe** (un solo proveedor/clave).
 
@@ -277,3 +277,12 @@ No se avanza de fase sin cerrar la anterior con Ernesto.
 **Verificado (2026-07-08):** generación en vivo con la charla 53 → guion de 4 ejes (darse cuenta de la información, sintonía del corazón, desacuerdo sin conflicto, memorias proyectadas), preguntas situadas y prácticas de días, sin zonas rojas. Build verde.
 
 **Ritual semanal de Ernesto (sin cambios):** entrega la fuente → Claude la destila (§3) → se registra en `src/fuentes/registro.js` → el algoritmo hace el resto.
+
+### La fuente se aplica, no se cita — y en voz la charla es corta (decisión de Ernesto, 2026-07-09)
+
+**Requisito de Ernesto:** el algoritmo "de la fuente a la práctica" no es exclusivo de la Sesión exprés: la IA debe **comprender** la fuente y **usarla prácticamente en toda charla, texto o audio**. Para Ernesto esta enseñanza proviene de fuentes que él considera **divinas** y debe tratarse con esa reverencia: su propósito es una **transformación real** en la persona, no acompañamiento decorativo. En **audio**, además, la charla debe ser **muy corta** y el sistema debe **proponer y dirigir** hacia algo concreto — no conversación abierta.
+
+**Implementado (v0.8):**
+- **System prompt (`src/ia/prompts.js`):** el bloque de la lente instruye comprender la fuente (no citarla mecánicamente), tratarla con reverencia y cuidado como material vivo, y hacer que **cada conversación aterrice en UNA aplicación práctica y vivible** (algo que la persona pueda hacer HOY). La transparencia espiritual/clínico (§2.4) se mantiene intacta: la lente se ofrece, no se impone, y las reglas duras mandan.
+- **Conversación por voz (`src/paginas/Conversacion.jsx` + `directorVoz` en `src/flujo/etapas.js`):** la voz usa el **mismo guion derivado de la fuente** que la Sesión exprés, con un director por turno: turno 1 elige un eje **en silencio** (sin anunciarlo) y hace su primera pregunta; turno 2 concreta; turno 3 propone **LA práctica personalizada** y cierra sin más preguntas. Respuestas de 2–3 frases habladas (`maxTokens` 300, esfuerzo `low`): en ~3 notas de voz la charla aterriza en práctica.
+- **Sin guion disponible** (fuente aún no genera): el director degrada a escuchar + una pregunta concreta; la seguridad (§2.2) envuelve cada turno igual que siempre.
