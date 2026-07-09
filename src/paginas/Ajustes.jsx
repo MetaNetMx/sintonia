@@ -28,8 +28,16 @@ export default function Ajustes() {
     if (!seguro) return;
     setOcupado(true);
     try {
-      await borrarTodo({ confirmado: true });
-      setMensaje('Se borraron todos tus datos locales.');
+      const resultado = await borrarTodo({ confirmado: true });
+      if (resultado.borrado) {
+        setMensaje('Se borraron todos tus datos locales.');
+      } else {
+        setMensaje(
+          'No se pudo borrar la voz clonada en el proveedor, así que no se borró nada (se conserva el registro para poder reintentar). Inténtalo de nuevo en un momento.'
+        );
+      }
+    } catch {
+      setMensaje('Algo falló al borrar; no se completó. Inténtalo de nuevo.');
     } finally {
       setOcupado(false);
     }
@@ -54,6 +62,8 @@ export default function Ajustes() {
           'No se pudo borrar la voz en el proveedor. Tus datos locales se conservaron para poder reintentar; vuelve a intentarlo en un momento.'
         );
       }
+    } catch {
+      setMensaje('Algo falló al borrar tus datos de voz; no se completó. Inténtalo de nuevo.');
     } finally {
       setOcupado(false);
     }

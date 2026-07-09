@@ -54,6 +54,18 @@ describe('aplicarCorsMismoOrigen', () => {
     expect(aplicarCorsMismoOrigen(mismo, res)).toBe(true);
     expect(aplicarCorsMismoOrigen(cruzado, res)).toBe(false);
   });
+
+  it('sin Origin: permite lecturas (GET/HEAD) pero rechaza escrituras (P2)', () => {
+    const res = resFalsa();
+    // Los navegadores siempre envian Origin en POST; su ausencia = cliente
+    // no-navegador (curl/script) intentando una escritura.
+    const lectura = { method: 'GET', headers: { host: 'localhost:5173' } };
+    const cabecera = { method: 'HEAD', headers: { host: 'localhost:5173' } };
+    const escritura = { method: 'POST', headers: { host: 'localhost:5173' } };
+    expect(aplicarCorsMismoOrigen(lectura, res)).toBe(true);
+    expect(aplicarCorsMismoOrigen(cabecera, res)).toBe(true);
+    expect(aplicarCorsMismoOrigen(escritura, res)).toBe(false);
+  });
 });
 
 describe('permitirPeticion (rate limiting por IP)', () => {

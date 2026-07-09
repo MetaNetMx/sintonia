@@ -2,7 +2,7 @@
 // Cubre los hallazgos P1 (consentimiento con id estable) y P2 (upsert de
 // conversaciones) de la auditoria externa 2026-07-08.
 import 'fake-indexeddb/auto';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   guardarConversacion,
   leerConversacion,
@@ -90,5 +90,68 @@ describe('borrado (PRD §7): guardas de confirmacion', () => {
     const resultado = await borrarTodo({ confirmado: true });
     expect(resultado.borrado).toBe(true);
     expect(await listarConversaciones()).toHaveLength(0);
+  });
+});
+
+describe('borrado con voz clonada (P1): la voz remota se borra primero', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('borrarTodo ABORTA sin tocar nada local si el proveedor falla', async () => {
+    await guardarConversacion({ id: 'c4', mensajes: [] });
+    await guardarConsentimientoVoz({});
+    await asignarVoiceId('voz-viva');
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false })));
+
+    const resultado = await borrarTodo({ confirmado: true });
+    expect(resultado.borrado).toBe(false);
+    expect(resultado.remoto).toBe('fallo');
+    // Nada se borro: la conversacion y el voiceId siguen para poder reintentar.
+    expect(await leerConversacion('c4')).toBeDefined();
+    expect((await leerConsentimientoVoz()).voiceId).toBe('voz-viva');
+  });
+
+  it('borrarTodo aborta tambien si la red falla (fetch lanza)', async () => {
+    await guardarConversacion({ id: 'c5', mensajes: [] });
+    await guardarConsentimientoVoz({});
+    await asignarVoiceId('voz-viva');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('red caida');
+      }),
+    );
+
+    const resultado = await borrarTodo({ confirmado: true });
+    expect(resultado.borrado).toBe(false);
+    expect(resultado.remoto).toBe('fallo');
+    expect(await leerConversacion('c5')).toBeDefined();
+  });
+
+  it('con consentimiento pero sin voz clonada no llama al proveedor y borra todo', async () => {
+    await guardarConsentimientoVoz({}); // voiceId queda null
+    const fetchFalso = vi.fn();
+    vi.stubGlobal('fetch', fetchFalso);
+
+    const resultado = await borrarTodo({ confirmado: true });
+    expect(resultado.borrado).toBe(true);
+    expect(resultado.remoto).toBe('no_aplica');
+    expect(fetchFalso).not.toHaveBeenCalled();
+    expect(await leerConsentimientoVoz()).toBeUndefined();
+  });
+
+  it('borrarTodo borra la voz en el proveedor y despues todo lo local', async () => {
+    await guardarConsentimientoVoz({});
+    await asignarVoiceId('voz-viva');
+    const fetchFalso = vi.fn(async () => ({ ok: true }));
+    vi.stubGlobal('fetch', fetchFalso);
+
+    const resultado = await borrarTodo({ confirmado: true });
+    expect(resultado.borrado).toBe(true);
+    expect(resultado.remoto).toBe('ok');
+    expect(fetchFalso).toHaveBeenCalledTimes(1);
+    expect(await listarConversaciones()).toHaveLength(0);
+    expect(await leerConsentimientoVoz()).toBeUndefined();
   });
 });

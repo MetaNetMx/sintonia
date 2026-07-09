@@ -42,9 +42,17 @@ export function aplicarCorsMismoOrigen(req, res) {
   const origin = req.headers.origin;
   const host = req.headers.host;
 
-  // Peticiones same-origin de fetch a veces no envian Origin (GET/navegacion):
-  // en ese caso no hay riesgo de otro sitio y se permite.
-  if (!origin) return true;
+  // Los navegadores SIEMPRE envian Origin en peticiones de escritura (POST y
+  // el preflight OPTIONS); solo las lecturas same-origin (GET/HEAD de fetch o
+  // navegacion) pueden llegar sin el. Una escritura sin Origin viene de un
+  // cliente no-navegador (curl, script) y se rechaza (hallazgo P2 de la
+  // auditoria: antes se permitia cualquier peticion sin Origin).
+  // HONESTIDAD TECNICA: Origin es falsificable fuera del navegador; esto sube
+  // la barrera pero NO sustituye rate limiting de plataforma ni autenticacion
+  // (ver deuda en PRD §13 antes de exponer llaves reales a trafico publico).
+  if (!origin) {
+    return req.method === 'GET' || req.method === 'HEAD';
+  }
 
   let originHost = '';
   try {

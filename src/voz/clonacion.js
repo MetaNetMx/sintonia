@@ -89,14 +89,51 @@ export async function clonarVoz({ muestras, nombre }) {
     throw new Error(`El servicio de clonacion respondio con error: ${detalle}`);
   }
 
-  const datos = await respuesta.json();
+  let datos;
+  try {
+    datos = await respuesta.json();
+  } catch (errorParse) {
+    // La voz PUDO haberse creado en el proveedor; sin cuerpo legible no hay
+    // id para revertirla (garantia pendiente server-side).
+    throw new Error('El servicio de clonacion respondio en un formato inesperado.', {
+      cause: errorParse,
+    });
+  }
   if (!datos || !datos.voiceId) {
     throw new Error('El servicio no devolvio un identificador de voz.');
   }
 
   // 4) Asociar el voiceId al consentimiento: imprescindible para poder borrar
-  // la voz tambien en el proveedor al revocar (PRD §6).
-  await consentimientos.asignarVoiceId(datos.voiceId);
+  // la voz tambien en el proveedor al revocar (PRD §6). Si este guardado
+  // falla, la voz recien creada quedaria HUERFANA en el proveedor (existiria
+  // sin que la app conserve como borrarla), asi que se revierte la clonacion
+  // via /api/voz-borrar antes de reportar el error.
+  try {
+    await consentimientos.asignarVoiceId(datos.voiceId);
+  } catch (errorGuardado) {
+    let revertida = false;
+    try {
+      const borrado = await fetch(CONFIG.endpoints.borrarVoz, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ voiceId: datos.voiceId }),
+      });
+      revertida = borrado.ok;
+    } catch {
+      // La revocacion remota tampoco respondio; se informa abajo.
+    }
+    // El voiceId viaja en el error: si la reversion fallo, es el UNICO rastro
+    // de la voz huerfana (la key del proveedor es server-side; la persona no
+    // tiene cuenta ahi desde la cual borrarla).
+    const error = new Error(
+      revertida
+        ? 'No se pudo guardar la voz clonada en este dispositivo; se revirtió la clonación. Intenta de nuevo.'
+        : `No se pudo guardar la voz clonada ni revertirla en el proveedor. Conserva este identificador para poder borrarla después: ${datos.voiceId}`,
+      { cause: errorGuardado },
+    );
+    error.voiceId = datos.voiceId;
+    throw error;
+  }
 
   return { voiceId: datos.voiceId };
 }

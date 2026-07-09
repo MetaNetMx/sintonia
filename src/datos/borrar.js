@@ -11,24 +11,37 @@ import { CONFIG } from '../config/app.js';
  * Borra TODA la base de datos local: perfil, conversaciones, consentimientos,
  * fuentes y meditaciones. Operacion irreversible.
  *
+ * PRIMERO borra la voz clonada en el PROVEEDOR (via borrarVoz): si se
+ * limpiaran los stores antes, el voiceId se perderia localmente y la voz
+ * remota quedaria viva sin manera de borrarla desde la app (dato biometrico,
+ * PRD §6). Si el borrado remoto falla, se ABORTA sin tocar nada local, para
+ * conservar el voiceId y poder reintentar.
+ *
  * La UI DEBE pedir confirmacion explicita al usuario antes de llamar y pasar
  * { confirmado: true }. Sin ese gesto, la funcion no borra nada.
  *
  * @param {object} opciones
  * @param {boolean} opciones.confirmado  Debe ser true (gesto de confirmacion de la UI).
- * @returns {Promise<{ borrado: boolean, stores: string[] }>}
+ * @returns {Promise<{ borrado: boolean, remoto: 'ok'|'fallo'|'no_aplica', stores: string[] }>}
  */
 export async function borrarTodo({ confirmado } = {}) {
   if (confirmado !== true) {
     // Guarda de seguridad: exige confirmacion explicita.
-    return { borrado: false, stores: [] };
+    return { borrado: false, remoto: 'no_aplica', stores: [] };
   }
 
+  // 1) La voz remota primero; si el proveedor no la borro, no seguimos.
+  const voz = await borrarVoz({ confirmado: true });
+  if (voz.remoto === 'fallo') {
+    return { borrado: false, remoto: 'fallo', stores: [] };
+  }
+
+  // 2) Ahora si, todo lo local.
   for (const store of LISTA_STORES) {
     await limpiarStore(store);
   }
 
-  return { borrado: true, stores: LISTA_STORES };
+  return { borrado: true, remoto: voz.remoto, stores: LISTA_STORES };
 }
 
 /**
@@ -69,7 +82,11 @@ export async function borrarVoz({ confirmado } = {}) {
       }
     }
   } catch {
-    /* sin registro local: solo limpieza local */
+    // leerConsentimientoVoz devuelve undefined cuando no hay registro: si esto
+    // LANZA es un fallo real de lectura (IndexedDB bloqueada, import roto).
+    // Limpiar el store en ese estado podria perder un voiceId con la voz
+    // remota viva (el bug que este modulo previene), asi que se aborta.
+    return { borrado: false, remoto: 'fallo' };
   }
 
   // 2) Si el proveedor NO borro, conservamos el registro (y su voiceId) para

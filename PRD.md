@@ -184,7 +184,7 @@ No se avanza de fase sin cerrar la anterior con Ernesto.
 
 ---
 
-## 13. Estado de construcción (andamiaje) — v0.2
+## 13. Estado de construcción — v0.7 (actualizado 2026-07-09)
 
 ### Qué existe y funciona
 - **Compila y empaqueta:** `npm install` + `npm run build` sin errores (Vite 6, PWA con service worker generado).
@@ -194,6 +194,9 @@ No se avanza de fase sin cerrar la anterior con Ernesto.
 - **Voz:** capa TTS con ElevenLabs (por proxy) y respaldo Web Speech; consentimiento biométrico explícito y revocable.
 - **Datos:** IndexedDB local-first con exportar-todo (JSON) y borrar-todo / borrar-voz con confirmación.
 - **IA:** cliente por proxy `/api/anthropic`; system prompt con las reglas duras y hueco para inyectar la "lente" de la fuente semanal.
+- **Clonación y revocación de voz (server-side):** contrato unificado cliente↔servidor en `src/voz/clonacion.js` ↔ `api/voz-clonar.js` (JSON base64 + `consentimiento: true`), consentimiento biométrico persistido en IndexedDB (`src/datos/consentimientos.js`) y borrado REAL en el proveedor vía `api/voz-borrar.js`: `borrarVoz()` y `borrarTodo()` borran la voz remota primero y abortan si el proveedor falla; si clonar funciona pero falla guardar el `voiceId`, la clonación se revierte (sin voces huérfanas).
+- **Protección de la API:** rate limiting por IP en todos los endpoints `/api`, límites de tamaño de entrada en `/api/anthropic` y CORS mismo-origen que exige `Origin` en las escrituras.
+- **Calidad:** suite de tests (`npm test`, vitest) sobre los contratos críticos y CI en GitHub Actions (tests + build en cada push/PR).
 
 ### Cómo correrlo
 - **Local completo:** pon `ANTHROPIC_API_KEY` en `terapia/.env.local` y corre `cd terapia && npm run dev` → `localhost:5173`. Un **puente de desarrollo** en `vite.config.js` (plugin `api-dev`) sirve las funciones de `api/` localmente, así que la Sesión de indagación **responde con Claude sin necesidad de Vercel**. ✔️ Verificado (2026-07-08): round-trip real con `claude-sonnet-5`. `.env.local` tiene **precedencia** sobre el entorno del sistema.
@@ -201,12 +204,14 @@ No se avanza de fase sin cerrar la anterior con Ernesto.
 - **Producción:** en Vercel las funciones `api/` se sirven nativas (el puente solo aplica en dev). Configurar **Root Directory = `terapia`** y las env vars en el proyecto. Ninguna clave se expone al cliente.
 
 ### Pendientes / deuda conocida (a resolver en próximos incrementos)
-1. **Flujo de grabación + clonación de voz incompleto.** Hay un **desajuste de contrato**: `src/voz/clonacion.js` envía muestras como `multipart/form-data` sin `consentimiento`, mientras `api/voz-clonar.js` espera JSON con `muestras` en base64 y `consentimiento: true`. Reconciliar al construir el flujo real de grabación (con key de ElevenLabs para probar).
-2. **Borrado server-side de la voz.** `borrarVoz()` limpia IndexedDB pero **no** llama a `DELETE /v1/voices/{voiceId}` en ElevenLabs. Falta `api/voz-borrar.js` para cumplir de verdad la revocación del dato biométrico (§6).
-3. **Cifrado en reposo pendiente.** Los datos sensibles se guardan hoy en claro en IndexedDB; la frontera de cifrado está marcada con TODO en `src/datos/db.js` (§7).
-4. **Iconos PWA pendientes** (192×192 y 512×512) antes de producción.
-5. **Prototipo de un solo usuario** (Ernesto): sin autenticación multiusuario todavía.
-6. **Deploy:** al publicar en Vercel, configurar **Root Directory = `terapia`**.
+1. **Cifrado en reposo pendiente.** Los datos sensibles se guardan hoy en claro en IndexedDB; la frontera de cifrado está marcada con TODO en `src/datos/db.js` (§7).
+2. **Iconos PWA pendientes** (192×192 y 512×512) antes de producción.
+3. **Prototipo de un solo usuario** (Ernesto): sin autenticación multiusuario todavía.
+4. **Deploy:** al publicar en Vercel, configurar **Root Directory = `terapia`**.
+5. **Rate limiting de producción.** El limitador actual (`api/_lib/config.js`) vive en memoria por instancia: en serverless es "mejor esfuerzo" y no protege contra abuso distribuido. Antes de exponer llaves reales a tráfico público: Vercel Firewall / WAF, rate limit distribuido (p. ej. Upstash Redis) y/o autenticación ligera o captcha en las rutas costosas (§2.5).
+6. **UI de grabación de voz pendiente.** La capa de clonación (`clonarVoz`, helpers de MediaRecorder) está lista y probada, pero falta la pantalla que graba las muestras y llama a `clonarVoz` (visión "escucharte a ti mismo guiándote", §6).
+
+> **Resuelto (2026-07-09, auditoría externa 2026-07-08):** el desajuste de contrato de la clonación y el borrado server-side de la voz que antes aparecían aquí como deuda — ver "Qué existe y funciona".
 
 ---
 

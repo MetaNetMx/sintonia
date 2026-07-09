@@ -1,4 +1,5 @@
 # Notas de sesión — 2026-07-07 / 2026-07-08
+# (addendum 2026-07-09 al final)
 
 > Bitácora de trabajo entre Ernesto (dirección clínica y creativa) y Claude
 > (socio de diseño y desarrollo). Complementa al **PRD.md**, que sigue siendo
@@ -56,3 +57,33 @@
 > "Audita https://github.com/MetaNetMx/sintonia — lee primero PRD.md (reglas
 > éticas §2, voz §6, algoritmo central §16, deuda §13) y evalúa si el código
 > cumple lo que el PRD promete."
+
+---
+
+## Addendum — 2026-07-09
+
+Lo de arriba se conserva como historia; esto es lo que cambió después.
+
+### v0.7 publicada (commit `8126d4e`): correcciones de la auditoría externa 2026-07-08
+
+- **P1:** rate limiting por IP + límites de tamaño de entrada en todos los
+  `/api`; el consentimiento biométrico se **persiste** en IndexedDB
+  (`src/datos/consentimientos.js`) y la revocación borra la voz **también en
+  el proveedor** (`api/voz-borrar.js`). El punto 2 de "Próximos pasos"
+  (reconciliar `voz-clonar` + crear `voz-borrar`) quedó **resuelto**.
+- **P2:** contrato `voz-clonar` unificado (JSON base64 + `consentimiento: true`).
+- **P3:** CI en GitHub Actions + suite de tests con vitest (`npm test`).
+
+### Segunda ronda de auditoría (2026-07-09): voz huérfana y PRD al día
+
+- **Borrar todo** ahora borra la voz clonada en el proveedor **primero** y
+  aborta sin tocar nada local si el proveedor falla (antes podía dejar una
+  voz viva en ElevenLabs sin `voiceId` local para borrarla).
+- **clonarVoz** hace **rollback** (borra la voz recién creada) si falla
+  guardar el `voiceId` en IndexedDB: sin voces huérfanas.
+- **CORS:** las escrituras sin cabecera `Origin` se rechazan (los navegadores
+  siempre la envían en POST); el rate limiting de producción (Vercel
+  Firewall / Redis distribuido) quedó documentado como deuda en PRD §13.
+- **PRD §13 actualizado a v0.7:** la deuda ya resuelta se movió a "Qué existe
+  y funciona"; deuda nueva registrada (rate limiting de producción, UI de
+  grabación de voz pendiente).
