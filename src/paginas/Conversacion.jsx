@@ -3,7 +3,7 @@ import { useAcompanamiento } from '../ia/useAcompanamiento.js';
 import { componerSistema } from '../ia/prompts.js';
 import { cargarFuenteActiva, lenteDeFuente } from '../fuentes/dinamicas.js';
 import { obtenerGuion } from '../flujo/guion.js';
-import { directorVoz } from '../flujo/etapas.js';
+import { directorVoz, separarMeditacion } from '../flujo/etapas.js';
 import { iniciarGrabacion, soportaGrabacion } from '../voz/clonacion.js';
 import { transcribir } from '../voz/transcribir.js';
 import { listarVoces } from '../voz/voces.js';
@@ -70,17 +70,40 @@ export default function Conversacion() {
     };
   }, []);
 
-  // Reproducir automaticamente la ultima respuesta del asistente.
+  // Reproducir automaticamente la ultima respuesta del asistente. Si trae
+  // MEDITACION: (cierre del turno 3), se separa: se habla completa (cierre +
+  // meditacion, sin el marcador) y la meditacion se GUARDA para re-escucharla
+  // en la pagina Meditaciones (hallazgo Media 2026-07-09: la meditacion de
+  // voz no se guardaba nunca).
   useEffect(() => {
     const ultimo = mensajes[mensajes.length - 1];
-    if (ultimo && ultimo.rol === 'asistente' && ultimo.id !== ultimoHabladoRef.current) {
-      ultimoHabladoRef.current = ultimo.id;
-      tts.hablar({ texto: ultimo.contenido, voiceId: voiceId || undefined });
+    if (!ultimo || ultimo.rol !== 'asistente' || ultimo.id === ultimoHabladoRef.current) return;
+    ultimoHabladoRef.current = ultimo.id;
+
+    const { cierre, meditacion } = separarMeditacion(ultimo.contenido);
+    const hablado = meditacion ? `${cierre}\n\n${meditacion}` : ultimo.contenido;
+    tts.hablar({ texto: hablado, voiceId: voiceId || undefined });
+
+    if (meditacion) {
+      import('../datos/meditaciones.js')
+        .then((m) =>
+          m.guardarMeditacion({
+            texto: meditacion,
+            fuenteId: fuente?.id || null,
+            titulo: fuente?.titulo
+              ? `Meditación — ${fuente.titulo} (voz)`
+              : 'Meditación — conversación por voz',
+          })
+        )
+        .catch(() => {
+          /* sin persistencia disponible */
+        });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mensajes]);
 
   const iniciar = async () => {
+    if (!puedeConversar) return;
     setErrorVoz(null);
     tts.detener();
     try {
@@ -113,16 +136,35 @@ export default function Conversacion() {
     }
   };
 
+  const ocupado = cargando || procesando;
+  // Compuerta de estados (hallazgo Media 2026-07-09):
+  // - listo: no se conversa hasta tener fuente Y guion (evita que el primer
+  //   turno use la lente estatica mientras carga la dinamica).
+  // - sesionCerrada: el turno 3 cierra con practica y meditacion; despues se
+  //   invita a una conversacion nueva (el director tambien lo respalda).
+  // - contencion: crisis alta = estado terminal; el hook ademas bloquea enviar.
+  const listo = Boolean(fuente && guion);
+  const turnosUsuario = mensajes.filter((m) => m.rol === 'usuario').length;
+  const sesionCerrada = turnosUsuario >= 3 && !cargando;
+  const contencion = crisis.nivel === 'alto';
+  const puedeConversar = listo && !sesionCerrada && !contencion;
+
   const enviarTexto = (evento) => {
     evento.preventDefault();
     const limpio = texto.trim();
-    if (!limpio || cargando) return;
+    if (!limpio || cargando || !puedeConversar) return;
     setTexto('');
     tts.detener();
     enviar(limpio);
   };
 
-  const ocupado = cargando || procesando;
+  const nuevaConversacion = () => {
+    tts.detener();
+    ultimoHabladoRef.current = null;
+    setTexto('');
+    setErrorVoz(null);
+    reiniciar();
+  };
 
   return (
     <section>
@@ -216,6 +258,47 @@ export default function Conversacion() {
         </p>
       )}
 
+      {!listo && (
+        <p className="mt-3 text-sm text-[var(--color-texto-tenue)]">
+          Preparando la conversación con la fuente de esta semana…
+        </p>
+      )}
+
+      {/* Contencion terminal: tras crisis alta la charla no continua. */}
+      {contencion && (
+        <div className="mt-5 rounded-[var(--radius-suave)] border border-[var(--color-borde)] bg-[var(--color-superficie)] p-5">
+          <p className="max-w-prose text-[var(--color-texto)]">
+            Esta conversación se queda aquí, en contención. Lo que compartiste
+            merece apoyo humano directo: SAPTEL (55 5259 8121), Línea de la Vida
+            (800 911 2000) o, si hay riesgo inmediato, 911.
+          </p>
+          <button
+            type="button"
+            onClick={nuevaConversacion}
+            className="mt-4 rounded-[var(--radius-suave)] border border-[var(--color-borde)] px-4 py-2 text-[var(--color-texto)]"
+          >
+            Empezar una conversación nueva
+          </button>
+        </div>
+      )}
+
+      {/* Cierre de sesion: 3 turnos -> practica + meditacion, y a descansar. */}
+      {sesionCerrada && !contencion && (
+        <div className="mt-5 rounded-[var(--radius-suave)] border border-[var(--color-borde)] bg-[var(--color-superficie)] p-5">
+          <p className="max-w-prose text-[var(--color-texto-suave)]">
+            La charla cerró con una práctica y tu meditación quedó guardada en
+            <strong> Meditaciones</strong> para re-escucharla cuando quieras.
+          </p>
+          <button
+            type="button"
+            onClick={nuevaConversacion}
+            className="mt-4 rounded-[var(--radius-suave)] border border-[var(--color-borde)] px-4 py-2 text-[var(--color-texto)]"
+          >
+            Nueva conversación
+          </button>
+        </div>
+      )}
+
       {/* Control de grabacion (nota de voz) */}
       <div className="mt-5 flex flex-col items-center gap-3">
         {puedeGrabar ? (
@@ -223,7 +306,7 @@ export default function Conversacion() {
             <button
               type="button"
               onClick={iniciar}
-              disabled={ocupado}
+              disabled={ocupado || !puedeConversar}
               className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--color-acento)] text-2xl text-[var(--color-acento-contraste)] disabled:opacity-40"
               aria-label="Grabar nota de voz"
             >
@@ -264,7 +347,7 @@ export default function Conversacion() {
         />
         <button
           type="submit"
-          disabled={ocupado || !texto.trim()}
+          disabled={ocupado || !texto.trim() || !puedeConversar}
           className="rounded-[var(--radius-suave)] bg-[var(--color-acento)] px-4 py-2 font-medium text-[var(--color-acento-contraste)] disabled:opacity-40"
         >
           Enviar
@@ -282,11 +365,7 @@ export default function Conversacion() {
         {mensajes.length > 0 && (
           <button
             type="button"
-            onClick={() => {
-              tts.detener();
-              ultimoHabladoRef.current = null;
-              reiniciar();
-            }}
+            onClick={nuevaConversacion}
             className="text-[var(--color-texto-suave)]"
           >
             Nueva conversación

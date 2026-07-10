@@ -17,6 +17,18 @@ export const CLAVE_CONSENTIMIENTO_VOZ = 'voz';
  *         DEBE tratar el fallo como "consentimiento no registrado".
  */
 export async function guardarConsentimientoVoz({ casillas } = {}) {
+  // Si ya habia consentimiento con voz clonada, el voiceId se CONSERVA:
+  // aceptar de nuevo no debe perder la unica referencia para borrar esa voz
+  // en el proveedor (hallazgo Alta de la auditoria 2026-07-09: antes se
+  // restablecia a null y la voz quedaba huerfana).
+  let voiceIdPrevio = null;
+  try {
+    const previo = await leerConsentimientoVoz();
+    if (previo?.voiceId) voiceIdPrevio = previo.voiceId;
+  } catch {
+    /* sin registro previo legible: si la DB esta rota, el put de abajo fallara */
+  }
+
   const registro = {
     id: CLAVE_CONSENTIMIENTO_VOZ,
     tipo: 'voz',
@@ -25,7 +37,7 @@ export async function guardarConsentimientoVoz({ casillas } = {}) {
     casillas: { ...(casillas || {}) },
     // Se llena al clonar la voz (asignarVoiceId); necesario para poder
     // borrarla tambien en el proveedor al revocar.
-    voiceId: null,
+    voiceId: voiceIdPrevio,
   };
   await put(STORES.CONSENTIMIENTOS, registro);
   return registro;

@@ -131,6 +131,9 @@ describe('borrado con voz clonada (P1): la voz remota se borra primero', () => {
   });
 
   it('con consentimiento pero sin voz clonada no llama al proveedor y borra todo', async () => {
+    // Partir sin voz clonada previa: guardar ahora CONSERVA el voiceId
+    // anterior (fix de la auditoria), asi que primero se revoca.
+    await revocarConsentimientoVoz();
     await guardarConsentimientoVoz({}); // voiceId queda null
     const fetchFalso = vi.fn();
     vi.stubGlobal('fetch', fetchFalso);
@@ -183,5 +186,19 @@ describe('meditaciones (PRD §16): el empalme se guarda para re-escucharse', () 
   it('una meditacion vacia no se guarda', async () => {
     await expect(guardarMeditacion({ texto: '   ' })).rejects.toThrow();
     await expect(guardarMeditacion({})).rejects.toThrow();
+  });
+});
+
+describe('re-consentir no pierde la voz clonada (auditoria 2026-07-09)', () => {
+  it('guardarConsentimientoVoz conserva el voiceId previo', async () => {
+    await guardarConsentimientoVoz({});
+    await asignarVoiceId('voz-remota-123');
+
+    // Aceptar de nuevo (p. ej. reabrir Meditaciones y re-consentir).
+    await guardarConsentimientoVoz({ casillas: { biometrico: true } });
+
+    const leido = await leerConsentimientoVoz();
+    expect(leido.voiceId).toBe('voz-remota-123');
+    expect(leido.casillas.biometrico).toBe(true);
   });
 });

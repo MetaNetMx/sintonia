@@ -45,6 +45,21 @@ export async function listarFuentesDinamicas() {
 /** Quita una fuente dinamica; la activa pasa a la anterior (o a la estatica). */
 export async function eliminarFuenteDinamica(fuenteId) {
   await del(STORES.FUENTES, `${PREFIJO}${fuenteId}`);
+  // Invalida tambien los guiones cacheados de esa fuente (hallazgo Media
+  // 2026-07-09: quedaban huerfanos y podian re-servirse).
+  try {
+    const todo = await getAll(STORES.FUENTES);
+    await Promise.all(
+      todo
+        .filter(
+          (r) =>
+            typeof r?.id === 'string' && r.id.startsWith('guion:') && r.fuenteId === fuenteId
+        )
+        .map((r) => del(STORES.FUENTES, r.id))
+    );
+  } catch {
+    /* limpieza de cache opcional */
+  }
 }
 
 /**

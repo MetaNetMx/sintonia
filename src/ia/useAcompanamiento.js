@@ -56,6 +56,10 @@ export function useAcompanamiento({ sistema, maxTokens, esfuerzo } = {}) {
   const conversacionIdRef = useRef(nuevoId());
 
   // Permite a la UI cerrar/reconocer la alerta de crisis sin borrar el hilo.
+  // OJO: reconocer solo oculta el modal; el nivel 'alto' se CONSERVA y la
+  // conversacion queda en contencion terminal (hallazgo Alta 2026-07-09:
+  // antes cerrar el modal permitia seguir como si nada, re-enviando la
+  // declaracion de riesgo a la IA). Salir de contencion = reiniciar.
   const reconocerCrisis = useCallback(() => {
     setCrisis((c) => ({ ...c, activa: false }));
   }, []);
@@ -71,6 +75,9 @@ export function useAcompanamiento({ sistema, maxTokens, esfuerzo } = {}) {
     async (texto) => {
       const contenido = (texto || '').trim();
       if (!contenido || cargando) return;
+      // Contencion terminal: tras una senal de crisis alta NO se continua esta
+      // conversacion (ni siquiera con mensajes benignos); se requiere reiniciar.
+      if (crisis.nivel === 'alto') return;
 
       setError(null);
 
@@ -140,7 +147,7 @@ export function useAcompanamiento({ sistema, maxTokens, esfuerzo } = {}) {
         setCargando(false);
       }
     },
-    [cargando, sistema, maxTokens, esfuerzo]
+    [cargando, sistema, maxTokens, esfuerzo, crisis.nivel]
   );
 
   return {

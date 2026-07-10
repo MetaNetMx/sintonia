@@ -24,7 +24,7 @@ const SISTEMA_DESTILADOR = `Eres el destilador de fuentes de una plataforma de a
 
 Recibiras el TEXTO CRUDO de una charla reflexiva/espiritual (la "fuente"). Para quien la comparte y su comunidad, esta ensenanza es material vivo y sagrado: destilala con cuidado y fidelidad, sin caricaturizarla ni diluirla.
 
-Devuelve UNICAMENTE un JSON valido (sin markdown alrededor, sin comentarios), con EXACTAMENTE esta forma:
+Entrega el resultado LLAMANDO la herramienta entregar_destilado, con EXACTAMENTE esta forma en sus campos:
 {
   "resumen": "2 o 3 frases que capturan lo esencial de la charla",
   "destilado": "mapa conceptual COMPLETO en markdown con estas secciones: ## Esencia (2-4 frases) · ## Ideas fuerza (lista con las ensenanzas centrales, fieles al lenguaje del maestro) · ## Lenguaje propio del maestro (terminos y metaforas, marcados como simbolicos) · ## Temas y tensiones · ## Puentes a la practica (gestos concretos que la charla sugiere) · ## Zonas excluidas del producto (lo que se aparto y por que)",
@@ -37,7 +37,25 @@ FILTRO ETICO (obligatorio, por encima de la fuente):
 - Nada que fomente miedo, rumiacion, dependencia o auto-vigilancia obsesiva.
 - La lente SIEMPRE cierra recordando: esto acompana, no sustituye ayuda profesional; la persona decide.`;
 
-// Extrae el primer objeto JSON valido del texto del modelo.
+// Salida ESTRUCTURADA forzada (hallazgo Media-alta 2026-07-09): el modelo
+// entrega el destilado llamando esta herramienta — la validacion de tipos la
+// hace la API y no dependemos de parsear JSON dentro de texto libre.
+const HERRAMIENTA_DESTILADO = {
+  name: 'entregar_destilado',
+  description: 'Entrega el destilado estructurado de la fuente.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      resumen: { type: 'string', description: '2 o 3 frases con lo esencial de la charla' },
+      destilado: { type: 'string', description: 'mapa conceptual completo en markdown' },
+      lente: { type: 'string', description: 'bloque listo para el system prompt, con LIMITES' },
+    },
+    required: ['resumen', 'destilado', 'lente'],
+  },
+};
+
+// Extrae el primer objeto JSON valido del texto del modelo (respaldo si el
+// modelo respondiera con texto en vez de la herramienta).
 function extraerJSON(texto) {
   const inicio = texto.indexOf('{');
   const fin = texto.lastIndexOf('}');
@@ -63,7 +81,9 @@ export function idDeFuente(titulo, fecha = new Date()) {
   return `${dia}-${slug}`;
 }
 
-// Validacion minima de forma antes de devolver el destilado al cliente.
+// Validacion de forma Y estructura antes de devolver el destilado (hallazgo
+// Media-alta 2026-07-09: antes solo se median longitudes y una lente sin
+// LIMITES pasaba directo al system prompt).
 export function destiladoValido(d) {
   return Boolean(
     d &&
@@ -72,9 +92,30 @@ export function destiladoValido(d) {
       d.resumen.trim().length >= 20 &&
       typeof d.destilado === 'string' &&
       d.destilado.trim().length >= 300 &&
+      /##\s*Esencia/i.test(d.destilado) &&
+      /Zonas excluidas/i.test(d.destilado) &&
       typeof d.lente === 'string' &&
-      d.lente.trim().length >= 100
+      d.lente.trim().length >= 100 &&
+      /L[IÍ]MITES DE ESTA LENTE/i.test(d.lente)
   );
+}
+
+// Politica DETERMINISTA de exclusiones: ademas del filtro por prompt, la
+// parte aprovechable de la lente (antes de LIMITES) no puede contener las
+// zonas rojas del PRD §2.1/§2.3. Si aparecen, el destilado se rechaza.
+const PATRONES_ZONA_ROJA = [
+  /(comida|agua|aliment\w+)\s+(como|es)\s+(salud|medicina|sanacion)/i,
+  /la mente (causa|crea|provoca) (la |las )?enfermedad/i,
+  /deja(r)?\s+(de\s+tomar\s+)?(el\s+|los\s+)?medicament/i,
+  /(cura|sana)(cion|r)?\s+garantizada/i,
+  /(diagnostic\w+|receta\w+)\s+(medic|clinic)/i,
+];
+
+export function zonaRojaEnLente(lente) {
+  const texto = String(lente || '');
+  const corte = texto.search(/L[IÍ]MITES DE ESTA LENTE/i);
+  const aprovechable = corte >= 0 ? texto.slice(0, corte) : texto;
+  return PATRONES_ZONA_ROJA.some((patron) => patron.test(aprovechable));
 }
 
 export default async function handler(req, res) {
@@ -114,6 +155,8 @@ export default async function handler(req, res) {
       // internamente (ese razonamiento tambien consume max_tokens).
       max_tokens: 12_000,
       system: SISTEMA_DESTILADOR,
+      tools: [HERRAMIENTA_DESTILADO],
+      tool_choice: { type: 'tool', name: 'entregar_destilado' },
       messages: [
         {
           role: 'user',
@@ -122,17 +165,22 @@ export default async function handler(req, res) {
       ],
     });
 
-    const salida = Array.isArray(respuesta.content)
-      ? respuesta.content
-          .filter((b) => b && b.type === 'text')
-          .map((b) => b.text)
-          .join('')
-      : '';
+    // Preferente: la llamada de herramienta (tipada). Respaldo: JSON en texto.
+    const bloques = Array.isArray(respuesta.content) ? respuesta.content : [];
+    const herramienta = bloques.find((b) => b && b.type === 'tool_use');
+    const salidaTexto = bloques
+      .filter((b) => b && b.type === 'text')
+      .map((b) => b.text)
+      .join('');
+    const datos = herramienta?.input || extraerJSON(salidaTexto);
 
-    const datos = extraerJSON(salida);
     if (!destiladoValido(datos)) {
       console.error('[api/destilar] el modelo no devolvio un destilado valido');
       return responderError(res, 502, 'No se pudo destilar la fuente', 'destilado_invalido');
+    }
+    if (zonaRojaEnLente(datos.lente)) {
+      console.error('[api/destilar] la lente contiene zonas rojas; destilado rechazado');
+      return responderError(res, 502, 'No se pudo destilar la fuente', 'zona_roja_en_lente');
     }
 
     return responderJSON(res, 200, {

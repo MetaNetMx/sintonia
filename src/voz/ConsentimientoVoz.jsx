@@ -35,8 +35,12 @@ const CASILLAS = [
     texto: 'Entiendo que mis grabaciones se guardan primero en este dispositivo (local-first).',
   },
   {
+    id: 'proveedor',
+    texto: 'Entiendo que mis muestras se procesan con ElevenLabs (el proveedor de voz) y que lo que ese proveedor retiene se rige por su propia politica.',
+  },
+  {
     id: 'revocable',
-    texto: 'Se que puedo revocar este consentimiento y borrar mi voz en cualquier momento, sin friccion.',
+    texto: 'Se que puedo revocar este consentimiento cuando quiera: la app borra la voz clonada en el proveedor y todos mis datos de voz locales.',
   },
 ];
 
@@ -104,22 +108,27 @@ export default function ConsentimientoVoz({ onAceptar, onRechazar }) {
         <div>
           <dt className="font-medium text-[var(--color-texto)]">Donde se guarda</dt>
           <dd className="text-[var(--color-texto-suave)]">
-            Primero en este dispositivo (local-first). El envio para crear la voz pasa por un
-            servicio seguro; ninguna clave vive en la app.
+            Primero en este dispositivo (local-first). Para crear la voz, tus muestras se
+            envian a <strong>ElevenLabs</strong> (el proveedor de voz) a traves de un servicio
+            seguro; ninguna clave vive en la app.
           </dd>
         </div>
         <div>
           <dt className="font-medium text-[var(--color-texto)]">Cuanto tiempo</dt>
           <dd className="text-[var(--color-texto-suave)]">
-            El tiempo que tu decidas. Se conserva mientras quieras usar tu voz y ni un momento
-            mas de lo necesario.
+            La voz clonada existe mientras tu quieras usarla. Honestidad: ElevenLabs puede
+            retener el audio y el texto que procesa segun su propia politica de retencion, y
+            las muestras de clonacion no son elegibles para retencion cero en ese servicio.
           </dd>
         </div>
         <div>
           <dt className="font-medium text-[var(--color-texto)]">Como se borra</dt>
           <dd className="text-[var(--color-texto-suave)]">
-            Desde Ajustes puedes borrar tu voz y tus grabaciones cuando quieras. El borrado es
-            inmediato y sin friccion.
+            Desde Ajustes, cuando quieras: la app elimina la voz clonada de ElevenLabs mediante
+            su API (y no borra nada local hasta confirmar que el proveedor la borro) y elimina
+            tus grabaciones y consentimientos del dispositivo. Lo que ElevenLabs retenga
+            internamente se rige por su politica; su eliminacion inmediata no depende de
+            nosotros y no podemos garantizarla.
           </dd>
         </div>
       </dl>

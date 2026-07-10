@@ -150,7 +150,28 @@ export default function Acompanamiento() {
         </p>
       )}
 
-      {cerrada ? (
+      {/* Contencion terminal: tras crisis alta la sesion NO continua (la unica
+          salida es una sesion nueva); el hook ademas bloquea enviar(). */}
+      {crisis.nivel === 'alto' ? (
+        <div className="mt-5 rounded-[var(--radius-suave)] border border-[var(--color-borde)] bg-[var(--color-superficie)] p-5">
+          <p className="max-w-prose text-[var(--color-texto)]">
+            Esta sesión se queda aquí, en contención. Lo que compartiste merece
+            apoyo humano directo: SAPTEL (55 5259 8121), Línea de la Vida
+            (800 911 2000) o, si hay riesgo inmediato, 911.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              tts.detener();
+              setTexto('');
+              reiniciar();
+            }}
+            className="mt-4 rounded-[var(--radius-suave)] border border-[var(--color-borde)] px-4 py-2 text-[var(--color-texto)]"
+          >
+            Empezar una sesión nueva
+          </button>
+        </div>
+      ) : cerrada ? (
         <div className="mt-5">
           {meditacion && (
             <div className="rounded-[var(--radius-suave)] border border-[var(--color-borde)] bg-[var(--color-superficie)] p-5">

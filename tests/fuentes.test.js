@@ -12,7 +12,7 @@ import {
 } from '../src/fuentes/dinamicas.js';
 import { FUENTES } from '../src/fuentes/registro.js';
 import { LENTE_ACTIVA } from '../src/fuentes/lente.js';
-import { idDeFuente, destiladoValido } from '../api/destilar.js';
+import { idDeFuente, destiladoValido, zonaRojaEnLente } from '../api/destilar.js';
 
 describe('fuentes dinamicas: activar una fuente nueva desde la app', () => {
   it('sin dinamicas, la activa es la estatica del registro', async () => {
@@ -81,15 +81,56 @@ describe('api/destilar: contratos de id y validacion', () => {
     expect(idDeFuente('', new Date('2026-07-15T12:00:00Z'))).toBe('2026-07-15-fuente');
   });
 
-  it('destiladoValido exige resumen, destilado y lente con sustancia', () => {
-    const valido = {
-      resumen: 'Un resumen con suficiente sustancia para pasar.',
-      destilado: 'x'.repeat(400),
-      lente: 'y'.repeat(150),
-    };
-    expect(destiladoValido(valido)).toBe(true);
-    expect(destiladoValido({ ...valido, lente: 'corta' })).toBe(false);
-    expect(destiladoValido({ ...valido, destilado: 'corto' })).toBe(false);
+  const DESTILADO_OK = {
+    resumen: 'Un resumen con suficiente sustancia para pasar.',
+    destilado: `## Esencia\n${'x'.repeat(300)}\n## Zonas excluidas del producto\nNada clinico.`,
+    lente: `Trabajas con la lente de la charla "Prueba":\n${'y'.repeat(100)}\nLIMITES DE ESTA LENTE (obligatorios): nada de salud.`,
+  };
+
+  it('destiladoValido exige sustancia Y estructura (Esencia, Zonas excluidas, LIMITES)', () => {
+    expect(destiladoValido(DESTILADO_OK)).toBe(true);
+    // Solo longitudes ya no basta (hallazgo Media-alta 2026-07-09).
+    expect(destiladoValido({ ...DESTILADO_OK, lente: 'y'.repeat(150) })).toBe(false);
+    expect(destiladoValido({ ...DESTILADO_OK, destilado: 'x'.repeat(400) })).toBe(false);
+    expect(destiladoValido({ ...DESTILADO_OK, lente: 'corta' })).toBe(false);
     expect(destiladoValido(null)).toBe(false);
+  });
+
+  it('zonaRojaEnLente: politica determinista sobre la parte aprovechable', () => {
+    const conRoja = DESTILADO_OK.lente.replace(
+      'Trabajas con la lente',
+      'El agua como medicina sana. Trabajas con la lente',
+    );
+    expect(zonaRojaEnLente(conRoja)).toBe(true);
+    expect(zonaRojaEnLente('la mente causa enfermedad y mas texto')).toBe(true);
+    // Mencionar exclusiones DENTRO de LIMITES es legitimo.
+    expect(zonaRojaEnLente(DESTILADO_OK.lente)).toBe(false);
+    expect(
+      zonaRojaEnLente(
+        'Puntos sanos.\nLIMITES DE ESTA LENTE: nunca sugieras que la mente causa enfermedad.',
+      ),
+    ).toBe(false);
+  });
+});
+
+describe('cache de guiones (auditoria 2026-07-09): sin mezclas fuente/guion', () => {
+  it('eliminar una fuente dinamica invalida sus guiones cacheados', async () => {
+    const { STORES, put, getAll } = await import('../src/datos/db.js');
+    await guardarFuenteDinamica({
+      id: 'fuente-con-cache',
+      titulo: 'Con cache',
+      destilado: '## Esencia\nAlgo con sustancia…',
+    });
+    await put(STORES.FUENTES, {
+      id: 'guion:fuente-con-cache:abc123',
+      fuenteId: 'fuente-con-cache',
+      guion: { esencia: 'vieja' },
+    });
+
+    await eliminarFuenteDinamica('fuente-con-cache');
+
+    const restantes = await getAll(STORES.FUENTES);
+    expect(restantes.find((r) => r.id === 'fuente:fuente-con-cache')).toBeUndefined();
+    expect(restantes.find((r) => r.fuenteId === 'fuente-con-cache')).toBeUndefined();
   });
 });

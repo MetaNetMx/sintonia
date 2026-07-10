@@ -16,6 +16,24 @@ export default function Meditaciones() {
   const [mostrarConsent, setMostrarConsent] = useState(false);
   const [consentDado, setConsentDado] = useState(false);
 
+  // Carga el consentimiento EXISTENTE al abrir: sin esto, la pagina volvia a
+  // pedir consentimiento y re-aceptarlo restablecia el registro (hallazgo
+  // Alta 2026-07-09: el voiceId de una voz ya clonada se perdia).
+  useEffect(() => {
+    let vivo = true;
+    import('../datos/consentimientos.js')
+      .then((m) => m.leerConsentimientoVoz())
+      .then((registro) => {
+        if (vivo && registro?.otorgado === true) setConsentDado(true);
+      })
+      .catch(() => {
+        /* sin persistencia disponible */
+      });
+    return () => {
+      vivo = false;
+    };
+  }, []);
+
   // Meditaciones nacidas de las sesiones (empalme fuente + lo compartido,
   // PRD §16): se guardan al cierre de cada sesion para re-escucharlas.
   const [guardadas, setGuardadas] = useState([]);

@@ -45,6 +45,23 @@ export function directorConcretar(eje) {
   return `ETAPA CONCRETAR (turno 2 de 3). Sigues en el eje "${eje.titulo}". En UNA frase reconoce lo que la persona acaba de decir (sin repetirlo entero) y haz SOLO esta pregunta, adaptada a sus palabras: "${segunda}". Maximo 3 lineas.`;
 }
 
+/**
+ * Separa la meditacion final marcada con "MEDITACION:" del resto del texto.
+ * La usan la sesion expres (useFlujo) y la conversacion por voz (Conversacion)
+ * para mostrar/guardar la meditacion como pieza propia.
+ * @param {string} texto
+ * @returns {{ cierre: string, meditacion: string }}
+ */
+export function separarMeditacion(texto) {
+  const re = /MEDITACI[ÓO]N\s*:/i;
+  const encontrada = String(texto || '').match(re);
+  if (!encontrada) return { cierre: String(texto || '').trim(), meditacion: '' };
+  return {
+    cierre: texto.slice(0, encontrada.index).trim(),
+    meditacion: texto.slice(encontrada.index + encontrada[0].length).trim(),
+  };
+}
+
 // Serializa los ejes del guion de forma compacta para el director de voz:
 // el modelo necesita COMPRENDER la fuente completa (ideas, preguntas y
 // practicas) para elegir el eje y aterrizarlo, no solo un titulo.
@@ -115,13 +132,19 @@ EJES DEL GUION (sigue en el eje que elegiste en el turno anterior):
 ${ejes}
 Una frase de reconocimiento + la segunda pregunta del eje, concreta y adaptada a sus palabras.`;
   }
-  return `${base}
+  if (turno === 3) {
+    return `${base}
 EJES DEL GUION (sigue en el eje ya elegido):
 ${ejes}
-CIERRE PRACTICO — no alargues mas la charla: propon LA practica del eje, personalizada con SUS palabras, en maximo 3 frases habladas: que hacer, cuando, y como notara que la hizo. Es propuesta, no obligacion; no prometas resultados.
-Despues de la practica, guiala con una meditacion breve HABLADA (fluye en tu misma respuesta, sin anunciarla con formato).
-${instruccionMeditacion({ formato: 'voz' })}
-Al final despidete en UNA frase que le devuelva su autoridad interna. No hagas mas preguntas.`;
+CIERRE PRACTICO — no alargues mas la charla: propon LA practica del eje, personalizada con SUS palabras, en maximo 3 frases habladas: que hacer, cuando, y como notara que la hizo. Es propuesta, no obligacion; no prometas resultados. Despidete en UNA frase que le devuelva su autoridad interna; no hagas mas preguntas.
+Al final, en una linea aparte que empiece EXACTAMENTE con "MEDITACION:", agrega la meditacion hablada que cierra la charla (la app la separa, la guarda para re-escucharla y la reproduce).
+${instruccionMeditacion({ formato: 'voz' })}`;
+  }
+
+  // Turno 4 en adelante: la sesion ya cerro (la UI ademas bloquea el envio;
+  // esto es la red de seguridad si algo llega igual).
+  return `${base}
+LA SESION YA CERRO con una practica y una meditacion. No abras temas nuevos, no propongas otra practica y no hagas preguntas: agradece en UNA frase calida y sugiere, con suavidad, retomar lo que quiera seguir explorando en una proxima sesion.`;
 }
 
 /**

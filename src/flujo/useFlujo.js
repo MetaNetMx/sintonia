@@ -22,6 +22,7 @@ import {
   directorElegirEje,
   directorConcretar,
   directorPractica,
+  separarMeditacion,
 } from './etapas.js';
 
 function nuevoId() {
@@ -59,16 +60,7 @@ function separarEje(texto, ejes) {
   };
 }
 
-// Separa la meditacion final marcada con "MEDITACION:".
-function separarMeditacion(texto) {
-  const re = /MEDITACI[ÓO]N\s*:/i;
-  const encontrada = texto.match(re);
-  if (!encontrada) return { cierre: texto.trim(), meditacion: '' };
-  return {
-    cierre: texto.slice(0, encontrada.index).trim(),
-    meditacion: texto.slice(encontrada.index + encontrada[0].length).trim(),
-  };
-}
+// separarMeditacion vive en etapas.js (la comparte la conversacion por voz).
 
 // Guarda la meditacion de cierre (empalme fuente+persona, PRD §16) para poder
 // re-escucharla desde la pagina Meditaciones. No rompe la sesion si falla.
@@ -155,6 +147,9 @@ export function useFlujo() {
     async (texto) => {
       const contenido = (texto || '').trim();
       if (!contenido || cargando || cargandoGuion || !guion || etapa === 'cerrada') return;
+      // Contencion terminal (hallazgo Alta 2026-07-09): tras crisis alta la
+      // sesion no continua; la unica salida es reiniciar una sesion nueva.
+      if (crisis.nivel === 'alto') return;
 
       setError(null);
 
@@ -254,7 +249,7 @@ export function useFlujo() {
         setCargando(false);
       }
     },
-    [cargando, cargandoGuion, guion, etapa, ejeId, fuente]
+    [cargando, cargandoGuion, guion, etapa, ejeId, fuente, crisis.nivel]
   );
 
   const eje = guion?.ejes.find((e) => e.id === ejeId) || null;

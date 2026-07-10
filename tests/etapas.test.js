@@ -66,16 +66,23 @@ describe('directorVoz: la fuente dirige tambien la voz (decision 2026-07-09)', (
   it('turno 3: cierra con LA practica del guion y sin mas preguntas', () => {
     const d = directorVoz({ guion: GUION_RESPALDO, turno: 3 });
     expect(d).toMatch(/CIERRE PRACTICO/);
-    expect(d).toMatch(/No hagas mas preguntas/);
+    expect(d).toMatch(/no hagas mas preguntas/i);
     expect(d).toContain(GUION_RESPALDO.ejes[0].practica.titulo);
   });
 
-  it('turno 3: guia una meditacion hablada que empalma fuente y charla', () => {
+  it('turno 3: guia una meditacion con marcador para separarla y guardarla', () => {
     const d = directorVoz({ guion: GUION_RESPALDO, turno: 3 });
-    expect(d).toMatch(/meditacion breve HABLADA/i);
+    expect(d).toMatch(/MEDITACION:/);
     expect(d).toMatch(/detalles textuales/i);
     expect(d).toMatch(/SUS palabras/);
     expect(d).toMatch(/3 o 4 frases habladas/);
+  });
+
+  it('turno 4+: la sesion ya cerro — sin temas nuevos ni preguntas', () => {
+    const d = directorVoz({ guion: GUION_RESPALDO, turno: 4 });
+    expect(d).toMatch(/LA SESION YA CERRO/);
+    expect(d).toMatch(/no hagas preguntas/i);
+    expect(d).not.toMatch(/CIERRE PRACTICO/);
   });
 
   it('sin guion no truena: degrada a escuchar y UNA pregunta concreta', () => {

@@ -65,22 +65,34 @@ function extraerJSON(texto) {
   }
 }
 
-// Validacion minima de forma del guion antes de devolverlo.
+// Validacion de forma del guion antes de devolverlo. Endurecida (hallazgo
+// Media-alta 2026-07-09): id kebab-case real, 2 preguntas y 2+ pasos con
+// sustancia — el contrato que el flujo cliente de verdad consume.
+const ID_KEBAB = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+function textoConSustancia(v) {
+  return typeof v === 'string' && v.trim().length > 0;
+}
+
 function guionValido(g) {
   if (!g || typeof g !== 'object') return false;
-  if (typeof g.esencia !== 'string' || !g.esencia.trim()) return false;
-  if (typeof g.preguntaApertura !== 'string' || !g.preguntaApertura.trim()) return false;
+  if (!textoConSustancia(g.esencia)) return false;
+  if (!textoConSustancia(g.preguntaApertura)) return false;
   if (!Array.isArray(g.ejes) || g.ejes.length < 1) return false;
   return g.ejes.every(
     (e) =>
       e &&
       typeof e.id === 'string' &&
-      typeof e.titulo === 'string' &&
+      ID_KEBAB.test(e.id) &&
+      textoConSustancia(e.titulo) &&
       Array.isArray(e.preguntas) &&
-      e.preguntas.length >= 1 &&
+      e.preguntas.length >= 2 &&
+      e.preguntas.every(textoConSustancia) &&
       e.practica &&
-      typeof e.practica.titulo === 'string' &&
-      Array.isArray(e.practica.pasos)
+      textoConSustancia(e.practica.titulo) &&
+      Array.isArray(e.practica.pasos) &&
+      e.practica.pasos.length >= 2 &&
+      e.practica.pasos.every(textoConSustancia)
   );
 }
 
