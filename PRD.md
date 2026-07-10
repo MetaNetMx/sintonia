@@ -276,7 +276,7 @@ No se avanza de fase sin cerrar la anterior con Ernesto.
 
 **Verificado (2026-07-08):** generación en vivo con la charla 53 → guion de 4 ejes (darse cuenta de la información, sintonía del corazón, desacuerdo sin conflicto, memorias proyectadas), preguntas situadas y prácticas de días, sin zonas rojas. Build verde.
 
-**Ritual semanal de Ernesto (sin cambios):** entrega la fuente → Claude la destila (§3) → se registra en `src/fuentes/registro.js` → el algoritmo hace el resto.
+**Ritual semanal de Ernesto (actualizado 2026-07-09):** abre la página **Fuentes** en la app → pega el texto de la charla (o sube el .txt/.md) → pulsa **"Destilar y activar"** → el algoritmo hace el resto. Ya no se toca código ni repo (el flujo por registro estático sigue existiendo como respaldo curado).
 
 ### La fuente se aplica, no se cita — y en voz la charla es corta (decisión de Ernesto, 2026-07-09)
 
@@ -296,3 +296,14 @@ No se avanza de fase sin cerrar la anterior con Ernesto.
 - **Sesión exprés:** marcador `MEDITACION:` (4–6 frases respirables); `maxTokens` exprés subió a 500 para que el cierre no se corte.
 - **Conversación por voz:** la meditación fluye **hablada** dentro del cierre del turno 3 (3–4 frases); `maxTokens` voz 420.
 - **Se guarda para re-escucharse:** al cerrar la sesión, la meditación se persiste en IndexedDB (`src/datos/meditaciones.js`, store `meditaciones` que existía vacío) con fuente, eje y fecha; la página **Meditaciones** lista "Tus meditaciones" y las reproduce por voz — el circuito de "escucharte a ti mismo guiándote" (§6).
+
+### Actualizar la fuente desde la app (decisión de Ernesto, 2026-07-09)
+
+**Requisito de Ernesto:** poder **subir la actualización de la fuente de forma fácil**, sin depender de código, git ni de una sesión de desarrollo.
+
+**Implementado (v0.9):**
+- **Página Fuentes → "Actualizar la fuente de la semana":** Ernesto pega el texto crudo de la charla (o sube un `.txt`/`.md`) con un título, y pulsa un botón. Nada más.
+- **`api/destilar.js` (nuevo):** la IA destila la charla en tres piezas — `resumen`, `destilado` (mapa conceptual en markdown: esencia, ideas fuerza, lenguaje del maestro, temas y tensiones, puentes a la práctica, zonas excluidas) y `lente` (lista para el system prompt, con sus LÍMITES obligatorios). El **filtro ético va integrado al prompt** (excluye comida/agua/salud y "la mente causa enfermedad"; lo espiritual como marco, no como hecho; sin miedo) — y el generador de guiones filtra de nuevo: **doble filtro**. Rate limit estricto (3/min por IP).
+- **`src/fuentes/dinamicas.js` (nuevo):** las fuentes destiladas se guardan **local-first** en IndexedDB (claves `fuente:<id>` en el store `fuentes`, conviviendo con el caché de guiones `guion:<id>`). La dinámica **más reciente es la activa**; sin dinámicas, se usa el registro estático del repo (respaldo curado). `lenteDeFuente()` usa la lente generada de la fuente activa o cae a la curada.
+- **Auto-reflexivo de punta a punta:** id nuevo → caché de guion vacío → `/api/guion` genera guion nuevo → Sesión exprés, Conversación por voz y meditaciones usan la fuente nueva sin tocar nada. Se puede **quitar** una fuente dinámica (la activa pasa a la anterior).
+- **Nota de alcance:** las fuentes dinámicas viven en el dispositivo (privacidad local-first, PRD §7; se incluyen en exportar-todo y se borran con borrar-todo). El repo público conserva solo las fuentes curadas del registro estático — la auditoría externa del contenido dinámico se hace exportando los datos.

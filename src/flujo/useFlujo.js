@@ -12,8 +12,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { enviarMensaje } from '../ia/cliente.js';
 import { componerSistema } from '../ia/prompts.js';
-import { LENTE_ACTIVA } from '../fuentes/lente.js';
-import { fuenteActiva } from '../fuentes/registro.js';
+import { cargarFuenteActiva, lenteDeFuente } from '../fuentes/dinamicas.js';
 import { detectarSenalesCrisis } from '../seguridad/crisis.js';
 import { obtenerGuion } from './guion.js';
 import {
@@ -113,24 +112,30 @@ export function useFlujo() {
   const [ejeId, setEjeId] = useState(null);
 
   const idRef = useRef(nuevoId());
-  const fuente = fuenteActiva();
+  const [fuente, setFuente] = useState(null);
 
-  // 0) Verificar la fuente activa y obtener su guion. Si la fuente cambia
-  // (id nuevo), este efecto trae el guion nuevo: el flujo se reconfigura solo.
+  // 0) Cargar la fuente activa (dinamica desde IndexedDB o estatica del
+  // registro) y su guion. Cuando Ernesto activa una fuente nueva desde la
+  // pagina Fuentes, la proxima sesion trae guion nuevo: todo se reconfigura.
   useEffect(() => {
     let vivo = true;
     setCargandoGuion(true);
-    obtenerGuion(fuente).then(({ guion: g, origen }) => {
-      if (!vivo) return;
-      setGuion(g);
-      setOrigenGuion(origen);
-      setCargandoGuion(false);
-    });
+    cargarFuenteActiva()
+      .then((f) => {
+        if (!vivo) return null;
+        setFuente(f);
+        return obtenerGuion(f);
+      })
+      .then((r) => {
+        if (!vivo || !r) return;
+        setGuion(r.guion);
+        setOrigenGuion(r.origen);
+        setCargandoGuion(false);
+      });
     return () => {
       vivo = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fuente?.id]);
+  }, []);
 
   const reconocerCrisis = useCallback(() => {
     setCrisis((c) => ({ ...c, activa: false }));
@@ -189,7 +194,7 @@ export function useFlujo() {
       }
 
       const sistema =
-        componerSistema({ lente: LENTE_ACTIVA }) + '\n\n' + BREVEDAD + '\n\n' + director;
+        componerSistema({ lente: lenteDeFuente(fuente) }) + '\n\n' + BREVEDAD + '\n\n' + director;
 
       setCargando(true);
       try {
@@ -249,7 +254,7 @@ export function useFlujo() {
         setCargando(false);
       }
     },
-    [cargando, cargandoGuion, guion, etapa, ejeId]
+    [cargando, cargandoGuion, guion, etapa, ejeId, fuente]
   );
 
   const eje = guion?.ejes.find((e) => e.id === ejeId) || null;

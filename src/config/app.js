@@ -13,6 +13,7 @@ export const CONFIG = {
     voces: '/api/voces',
     clonarVoz: '/api/voz-clonar',
     borrarVoz: '/api/voz-borrar',
+    destilar: '/api/destilar',
   },
   flags: {
     vozHabilitada: true,

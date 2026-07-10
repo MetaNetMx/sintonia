@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAcompanamiento } from '../ia/useAcompanamiento.js';
 import { componerSistema } from '../ia/prompts.js';
-import { LENTE_ACTIVA } from '../fuentes/lente.js';
-import { fuenteActiva } from '../fuentes/registro.js';
+import { cargarFuenteActiva, lenteDeFuente } from '../fuentes/dinamicas.js';
 import { obtenerGuion } from '../flujo/guion.js';
 import { directorVoz } from '../flujo/etapas.js';
 import { iniciarGrabacion, soportaGrabacion } from '../voz/clonacion.js';
@@ -24,10 +23,15 @@ const MAX_TOKENS_VOZ = 420;
 // Requiere ELEVENLABS_API_KEY para voz/transcripcion; sin ella, avisa.
 export default function Conversacion() {
   const [guion, setGuion] = useState(null);
+  const [fuente, setFuente] = useState(null);
   useEffect(() => {
     let vivo = true;
-    obtenerGuion(fuenteActiva()).then(({ guion: g }) => {
-      if (vivo) setGuion(g);
+    cargarFuenteActiva().then((f) => {
+      if (!vivo) return;
+      setFuente(f);
+      obtenerGuion(f).then(({ guion: g }) => {
+        if (vivo) setGuion(g);
+      });
     });
     return () => {
       vivo = false;
@@ -36,8 +40,8 @@ export default function Conversacion() {
 
   const sistema = useCallback(
     ({ turno }) =>
-      componerSistema({ lente: LENTE_ACTIVA }) + '\n\n' + directorVoz({ guion, turno }),
-    [guion]
+      componerSistema({ lente: lenteDeFuente(fuente) }) + '\n\n' + directorVoz({ guion, turno }),
+    [guion, fuente]
   );
   const { mensajes, cargando, error, crisis, enviar, reconocerCrisis, reiniciar } =
     useAcompanamiento({ sistema, maxTokens: MAX_TOKENS_VOZ, esfuerzo: 'low' });
