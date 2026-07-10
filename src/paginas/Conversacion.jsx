@@ -11,9 +11,10 @@ import { listarVoces } from '../voz/voces.js';
 import { useTTS } from '../voz/useTTS.js';
 import ModalCrisis from '../seguridad/ModalCrisis.jsx';
 
-// Texto de salida acotado: respuestas hablables de 2-3 frases (el cierre con
-// practica necesita un poco mas). El proxy suma aparte el margen de razonamiento.
-const MAX_TOKENS_VOZ = 300;
+// Texto de salida acotado: respuestas hablables de 2-3 frases; el cierre lleva
+// practica + meditacion hablada (3-4 frases) y necesita mas espacio. El proxy
+// suma aparte el margen de razonamiento.
+const MAX_TOKENS_VOZ = 420;
 
 // Conversacion por voz (PRD §15): hablas por notas de voz (ElevenLabs Scribe) y
 // la app responde con voz natural (ElevenLabs). Misma lente + seguridad que la

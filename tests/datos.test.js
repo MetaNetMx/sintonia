@@ -15,6 +15,7 @@ import {
   revocarConsentimientoVoz,
 } from '../src/datos/consentimientos.js';
 import { borrarTodo } from '../src/datos/borrar.js';
+import { guardarMeditacion, listarMeditaciones } from '../src/datos/meditaciones.js';
 
 describe('consentimiento de voz (P1)', () => {
   it('persiste con id estable y se puede leer de vuelta', async () => {
@@ -153,5 +154,34 @@ describe('borrado con voz clonada (P1): la voz remota se borra primero', () => {
     expect(fetchFalso).toHaveBeenCalledTimes(1);
     expect(await listarConversaciones()).toHaveLength(0);
     expect(await leerConsentimientoVoz()).toBeUndefined();
+  });
+});
+
+describe('meditaciones (PRD §16): el empalme se guarda para re-escucharse', () => {
+  it('guarda con metadatos de fuente y eje, y lista recientes primero', async () => {
+    const a = await guardarMeditacion({
+      texto: 'Respira y nota el acuerdo de tu corazon.',
+      fuenteId: 'charla-53',
+      ejeId: 'sintonia-corazon',
+      titulo: 'Meditación — Sintonía del corazón',
+    });
+    expect(a.id).toBeTruthy();
+    expect(a.creadaEn).toBeTruthy();
+
+    // Segunda meditacion con fecha posterior garantizada.
+    const b = await guardarMeditacion({ texto: 'Vuelve a tu respiracion.' });
+    b.creadaEn = new Date(Date.now() + 1000).toISOString();
+    const { STORES, put } = await import('../src/datos/db.js');
+    await put(STORES.MEDITACIONES, b);
+
+    const lista = await listarMeditaciones();
+    expect(lista.length).toBeGreaterThanOrEqual(2);
+    expect(lista[0].id).toBe(b.id); // mas reciente primero
+    expect(lista.find((m) => m.id === a.id).fuenteId).toBe('charla-53');
+  });
+
+  it('una meditacion vacia no se guarda', async () => {
+    await expect(guardarMeditacion({ texto: '   ' })).rejects.toThrow();
+    await expect(guardarMeditacion({})).rejects.toThrow();
   });
 });

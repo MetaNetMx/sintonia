@@ -33,6 +33,18 @@ describe('directores de la sesion expres', () => {
     expect(director).toContain(eje.practica.titulo);
   });
 
+  it('la meditacion de la sesion expres es el EMPALME fuente + lo compartido', () => {
+    const eje = GUION_RESPALDO.ejes[0];
+    const director = directorPractica(eje);
+    // Sensibilidad extrema a los detalles de la persona…
+    expect(director).toMatch(/detalles textuales/i);
+    expect(director).toMatch(/SUS palabras/);
+    // …tejidos con la propuesta del eje de la fuente.
+    expect(director).toContain(`"${eje.titulo}"`);
+    expect(director).toMatch(/HAGA VIVIR/);
+    expect(director).toMatch(/no prometas resultados ni cura/i);
+  });
+
   it('configuracion expres: 4 pasos visibles, texto acotado, esfuerzo bajo', () => {
     expect(PASOS).toHaveLength(4);
     expect(MAX_TOKENS_EXPRES).toBeGreaterThanOrEqual(200);
@@ -56,6 +68,14 @@ describe('directorVoz: la fuente dirige tambien la voz (decision 2026-07-09)', (
     expect(d).toMatch(/CIERRE PRACTICO/);
     expect(d).toMatch(/No hagas mas preguntas/);
     expect(d).toContain(GUION_RESPALDO.ejes[0].practica.titulo);
+  });
+
+  it('turno 3: guia una meditacion hablada que empalma fuente y charla', () => {
+    const d = directorVoz({ guion: GUION_RESPALDO, turno: 3 });
+    expect(d).toMatch(/meditacion breve HABLADA/i);
+    expect(d).toMatch(/detalles textuales/i);
+    expect(d).toMatch(/SUS palabras/);
+    expect(d).toMatch(/3 o 4 frases habladas/);
   });
 
   it('sin guion no truena: degrada a escuchar y UNA pregunta concreta', () => {

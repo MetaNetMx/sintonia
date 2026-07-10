@@ -13,7 +13,8 @@ export const PASOS = [
 
 // Limite de TEXTO de salida para mantener el modo expres realmente breve
 // (el proxy suma aparte el margen para el razonamiento interno del modelo).
-export const MAX_TOKENS_EXPRES = 400;
+// 500: el cierre lleva practica + meditacion tejida (4-6 frases) sin cortarse.
+export const MAX_TOKENS_EXPRES = 500;
 
 // Esfuerzo de razonamiento bajo: turnos agiles, menos espera (sesion corta).
 export const ESFUERZO_EXPRES = 'low';
@@ -60,6 +61,32 @@ function resumenEjes(guion) {
 }
 
 /**
+ * Contrato de la MEDITACION (decision de Ernesto, 2026-07-09): la meditacion
+ * es el EMPALME de dos hilos — la propuesta de la fuente y lo que la persona
+ * compartio en ESTA charla (texto o audio). No es un cierre generico: cambia
+ * en cada sesion porque cambian sus dos hilos, y exige sensibilidad extrema
+ * a los detalles de lo dicho para que lo que la fuente propone se VIVA.
+ * @param {{ eje?: object|null, formato: 'texto'|'voz' }} params  Sin eje
+ *   (modo voz: el modelo lo eligio en silencio), se refiere al eje sostenido
+ *   en la charla.
+ */
+export function instruccionMeditacion({ eje, formato } = {}) {
+  const p = eje?.practica || {};
+  const marco = [eje?.idea, p.marco].filter(Boolean).join(' / ');
+  const nombreEje = eje?.titulo
+    ? `"${eje.titulo}" (${marco})`
+    : 'que elegiste y sostuviste en esta charla';
+  const extension =
+    formato === 'voz' ? '3 o 4 frases habladas' : '4 a 6 frases cortas y respirables';
+  return `LA MEDITACION — empalme de la fuente con lo compartido:
+- Antes de escribirla, RELEE toda la charla y recoge 2 o 3 detalles textuales de lo que la persona dijo (sus palabras exactas, sus imagenes, nombres, sensaciones). Se extremadamente sensible a esos detalles: ahi vive la meditacion.
+- Tejelos con la propuesta del eje ${nombreEje} de modo que la meditacion HAGA VIVIR lo que la fuente propone dentro de la situacion concreta que la persona conto — no que lo mencione ni lo resuma.
+- En segunda persona, tiempo presente, ${extension}, con pausas naturales, hecha para escucharse en voz.
+- Si la persona nombro algo con sus palabras, usa SUS palabras, no tus sinonimos.
+- La intencion es que lo que la fuente propone ocurra en su vida; no prometas resultados ni cura.`;
+}
+
+/**
  * Director de la CONVERSACION POR VOZ (decision de Ernesto, 2026-07-09):
  * en audio la charla debe ser MUY corta y dirigida — la fuente no es adorno,
  * se comprende y se aplica. En ~3 turnos la nota de voz aterriza en UNA
@@ -91,7 +118,10 @@ Una frase de reconocimiento + la segunda pregunta del eje, concreta y adaptada a
   return `${base}
 EJES DEL GUION (sigue en el eje ya elegido):
 ${ejes}
-CIERRE PRACTICO — no alargues mas la charla: propon LA practica del eje, personalizada con SUS palabras, en maximo 3 frases habladas: que hacer, cuando, y como notara que la hizo. Es propuesta, no obligacion; no prometas resultados. Cierra con UNA frase que le devuelva su autoridad interna y despidete breve. No hagas mas preguntas.`;
+CIERRE PRACTICO — no alargues mas la charla: propon LA practica del eje, personalizada con SUS palabras, en maximo 3 frases habladas: que hacer, cuando, y como notara que la hizo. Es propuesta, no obligacion; no prometas resultados.
+Despues de la practica, guiala con una meditacion breve HABLADA (fluye en tu misma respuesta, sin anunciarla con formato).
+${instruccionMeditacion({ formato: 'voz' })}
+Al final despidete en UNA frase que le devuelva su autoridad interna. No hagas mas preguntas.`;
 }
 
 /**
@@ -105,5 +135,8 @@ export function directorPractica(eje) {
 - Pasos base: ${pasos}
 - Marco: ${p.marco || ''}
 
-Presentala en 3 a 5 lineas como propuesta (no obligacion), con los pasos claros y aterrizados a lo que conto. Cierra con UNA frase que le devuelva su autoridad interna. Al final, en una linea aparte que empiece EXACTAMENTE con "MEDITACION:", escribe una meditacion de 3 frases en segunda persona, hecha a su medida, para escucharse en voz. No prometas resultados ni cura.`;
+Presentala en 3 a 5 lineas como propuesta (no obligacion), con los pasos claros y aterrizados a lo que conto. Cierra con UNA frase que le devuelva su autoridad interna.
+
+Al final, en una linea aparte que empiece EXACTAMENTE con "MEDITACION:", escribe la meditacion de cierre.
+${instruccionMeditacion({ eje, formato: 'texto' })}`;
 }

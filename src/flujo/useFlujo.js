@@ -71,6 +71,17 @@ function separarMeditacion(texto) {
   };
 }
 
+// Guarda la meditacion de cierre (empalme fuente+persona, PRD §16) para poder
+// re-escucharla desde la pagina Meditaciones. No rompe la sesion si falla.
+async function persistirMeditacion({ texto, fuenteId, ejeId, titulo }) {
+  try {
+    const mod = await import('../datos/meditaciones.js');
+    await mod.guardarMeditacion({ texto, fuenteId, ejeId, titulo });
+  } catch {
+    /* sin persistencia disponible */
+  }
+}
+
 // Persistencia local-first al cerrar (upsert unificado; no rompe si falla).
 async function persistirSesion(idConversacion, mensajes, tituloEje) {
   try {
@@ -199,10 +210,14 @@ export function useFlujo() {
         }
 
         // Turno final: separar la meditacion del cierre.
+        let meditacionFinal = '';
         if (siguiente === 'cerrada') {
           const { cierre, meditacion: med } = separarMeditacion(contenidoAsistente);
           contenidoAsistente = cierre || contenidoAsistente;
-          if (med) setMeditacion(med);
+          if (med) {
+            meditacionFinal = med;
+            setMeditacion(med);
+          }
         }
 
         const msjAsistente = crearMensaje('asistente', contenidoAsistente);
@@ -219,6 +234,14 @@ export function useFlujo() {
           const tituloEje = (guion.ejes.find((e) => e.id === (ejeId || guion.ejes[0].id)) || {})
             .titulo;
           persistirSesion(idRef.current, hiloFinal, tituloEje);
+          if (meditacionFinal) {
+            persistirMeditacion({
+              texto: meditacionFinal,
+              fuenteId: fuente?.id || null,
+              ejeId: ejeId || guion.ejes[0].id,
+              titulo: tituloEje ? `Meditación — ${tituloEje}` : 'Meditación de sesión',
+            });
+          }
         }
       } catch (err) {
         if (!(err && err.name === 'AbortError')) setError(err);

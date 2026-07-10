@@ -286,3 +286,13 @@ No se avanza de fase sin cerrar la anterior con Ernesto.
 - **System prompt (`src/ia/prompts.js`):** el bloque de la lente instruye comprender la fuente (no citarla mecánicamente), tratarla con reverencia y cuidado como material vivo, y hacer que **cada conversación aterrice en UNA aplicación práctica y vivible** (algo que la persona pueda hacer HOY). La transparencia espiritual/clínico (§2.4) se mantiene intacta: la lente se ofrece, no se impone, y las reglas duras mandan.
 - **Conversación por voz (`src/paginas/Conversacion.jsx` + `directorVoz` en `src/flujo/etapas.js`):** la voz usa el **mismo guion derivado de la fuente** que la Sesión exprés, con un director por turno: turno 1 elige un eje **en silencio** (sin anunciarlo) y hace su primera pregunta; turno 2 concreta; turno 3 propone **LA práctica personalizada** y cierra sin más preguntas. Respuestas de 2–3 frases habladas (`maxTokens` 300, esfuerzo `low`): en ~3 notas de voz la charla aterriza en práctica.
 - **Sin guion disponible** (fuente aún no genera): el director degrada a escuchar + una pregunta concreta; la seguridad (§2.2) envuelve cada turno igual que siempre.
+
+### La meditación es el empalme (decisión de Ernesto, 2026-07-09)
+
+**Requisito de Ernesto:** la meditación debe estar **en relación con la fuente Y con lo que la persona dijo** (en texto o audio): una meditación que **empalme ambos hilos** con la intención de lograr lo que la fuente propone. Cambia en cada sesión —porque cambian sus dos hilos— y exige **sensibilidad extrema a los detalles** de lo compartido.
+
+**Implementado (v0.8):** contrato único en `instruccionMeditacion` (`src/flujo/etapas.js`), usado por ambos flujos:
+- **Cómo se teje:** antes de escribirla, la IA relee toda la charla y recoge 2–3 **detalles textuales** de lo que la persona dijo (sus palabras exactas, imágenes, sensaciones); los teje con la propuesta del eje de la fuente de modo que la meditación **haga vivir** lo que la fuente propone en la situación concreta de la persona — usando **sus** palabras, no sinónimos. Sin promesas de resultados ni cura (§2).
+- **Sesión exprés:** marcador `MEDITACION:` (4–6 frases respirables); `maxTokens` exprés subió a 500 para que el cierre no se corte.
+- **Conversación por voz:** la meditación fluye **hablada** dentro del cierre del turno 3 (3–4 frases); `maxTokens` voz 420.
+- **Se guarda para re-escucharse:** al cerrar la sesión, la meditación se persiste en IndexedDB (`src/datos/meditaciones.js`, store `meditaciones` que existía vacío) con fuente, eje y fecha; la página **Meditaciones** lista "Tus meditaciones" y las reproduce por voz — el circuito de "escucharte a ti mismo guiándote" (§6).

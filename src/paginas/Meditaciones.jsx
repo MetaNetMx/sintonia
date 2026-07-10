@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTTS } from '../voz/useTTS.js';
 import ConsentimientoVoz from '../voz/ConsentimientoVoz.jsx';
 
@@ -15,6 +15,24 @@ export default function Meditaciones() {
   const [texto, setTexto] = useState(TEXTO_EJEMPLO);
   const [mostrarConsent, setMostrarConsent] = useState(false);
   const [consentDado, setConsentDado] = useState(false);
+
+  // Meditaciones nacidas de las sesiones (empalme fuente + lo compartido,
+  // PRD §16): se guardan al cierre de cada sesion para re-escucharlas.
+  const [guardadas, setGuardadas] = useState([]);
+  useEffect(() => {
+    let vivo = true;
+    import('../datos/meditaciones.js')
+      .then((m) => m.listarMeditaciones())
+      .then((lista) => {
+        if (vivo) setGuardadas(lista);
+      })
+      .catch(() => {
+        /* sin persistencia disponible */
+      });
+    return () => {
+      vivo = false;
+    };
+  }, []);
 
   return (
     <section>
@@ -69,6 +87,47 @@ export default function Meditaciones() {
         <p className="mt-3 text-sm text-[var(--color-texto-suave)]">
           No se pudo reproducir la voz en este dispositivo.
         </p>
+      )}
+
+      {guardadas.length > 0 && (
+        <div className="mt-10">
+          <h2 className="text-lg font-medium text-[var(--color-texto)]">
+            Tus meditaciones
+          </h2>
+          <p className="mt-1 max-w-prose text-sm text-[var(--color-texto-suave)]">
+            Nacieron de tus sesiones: la fuente y lo que tú compartiste, tejidos
+            en una sola voz.
+          </p>
+          <ul className="mt-4 flex flex-col gap-3">
+            {guardadas.map((m) => (
+              <li
+                key={m.id}
+                className="rounded-[var(--radius-suave)] border border-[var(--color-borde)] bg-[var(--color-superficie)] p-4"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-medium text-[var(--color-texto)]">{m.titulo}</p>
+                  <span className="text-xs text-[var(--color-texto-tenue)]">
+                    {new Date(m.creadaEn).toLocaleDateString('es-MX')}
+                  </span>
+                </div>
+                <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--color-texto-suave)]">
+                  {m.texto}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTexto(m.texto);
+                    hablar({ texto: m.texto });
+                  }}
+                  disabled={cargando}
+                  className="mt-3 rounded-[var(--radius-suave)] border border-[var(--color-borde)] px-4 py-2 text-sm text-[var(--color-texto)] disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Escuchar
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       <div className="mt-10 rounded-[var(--radius-suave)] border border-[var(--color-borde)] p-5">
