@@ -292,6 +292,16 @@ No se avanza de fase sin cerrar la anterior con Ernesto.
 - **Conversación por voz (`src/paginas/Conversacion.jsx` + `directorVoz` en `src/flujo/etapas.js`):** la voz usa el **mismo guion derivado de la fuente** que la Sesión exprés, con un director por turno: turno 1 elige un eje **en silencio** (sin anunciarlo) y hace su primera pregunta; turno 2 concreta; turno 3 propone **LA práctica personalizada** y cierra sin más preguntas. Respuestas de 2–3 frases habladas (`maxTokens` 300, esfuerzo `low`): en ~3 notas de voz la charla aterriza en práctica.
 - **Sin guion disponible** (fuente aún no genera): el director degrada a escuchar + una pregunta concreta; la seguridad (§2.2) envuelve cada turno igual que siempre.
 
+### El método del analista (decisión de Ernesto, 2026-07-12)
+
+**Requisito de Ernesto:** la IA actúa como **analista experto en conciencia y comportamiento humano**, con rigor lógico, al servicio del propósito del proyecto: acompañar a la persona a indagar en su vida y elevar su nivel de conciencia. Tres movimientos obligatorios:
+
+1. **Análisis riguroso de la fuente:** comprenderla paso a paso — tesis principales, conceptos clave (fractales, calibración, códigos de información) y propuestas prácticas. La fuente es una **invitación formal a indagar**, no un texto a recitar.
+2. **Disonancia cognitiva honesta:** si la persona contradice la propuesta de la fuente, la IA no le da la razón de inmediato ni le impone la fuente: pone **ambas perspectivas sobre la mesa**, las analiza con lógica y ofrece una **conclusión matizada** que invite a pensar más hondo. La persona siempre decide.
+3. **Interacción socrática (mandatorio):** la función principal es **preguntar** — UNA sola pregunta por turno y **no más de 3 por sesión**, diseñadas para aterrizar la fuente en la vida diaria, relaciones o hábitos. Aplica a texto y voz.
+
+**Implementado (v0.11):** bloque `METODO_ANALISTA` en `src/ia/prompts.js` (entra a TODA conversación vía `componerSistema`), análisis paso a paso en el prompt del destilador (`api/destilar.js`), y refuerzo del contrato de meditación: es la **invitación de la fuente hecha voz, creada creativamente** (imagen guía, respiración, gesto — la forma la elige la IA según la charla) y **solo existe con charla previa** — sin contexto particular no se genera ni se inventan detalles. **Salvaguarda:** el método queda explícitamente **subordinado a las reglas duras §2** — la disonancia se suspende ante señales de crisis (manda la contención) y el propósito elevado nunca autoriza dogma ni presión.
+
 ### La meditación es el empalme (decisión de Ernesto, 2026-07-09)
 
 **Requisito de Ernesto:** la meditación debe estar **en relación con la fuente Y con lo que la persona dijo** (en texto o audio): una meditación que **empalme ambos hilos** con la intención de lograr lo que la fuente propone. Cambia en cada sesión —porque cambian sus dos hilos— y exige **sensibilidad extrema a los detalles** de lo compartido.

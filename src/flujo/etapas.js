@@ -98,6 +98,8 @@ export function instruccionMeditacion({ eje, formato } = {}) {
   return `LA MEDITACION — empalme de la fuente con lo compartido:
 - Antes de escribirla, RELEE toda la charla y recoge 2 o 3 detalles textuales de lo que la persona dijo (sus palabras exactas, sus imagenes, nombres, sensaciones). Se extremadamente sensible a esos detalles: ahi vive la meditacion.
 - Tejelos con la propuesta del eje ${nombreEje} de modo que la meditacion HAGA VIVIR lo que la fuente propone dentro de la situacion concreta que la persona conto — no que lo mencione ni lo resuma.
+- La meditacion es la INVITACION de la fuente hecha voz para ESTA persona: creala de forma CREATIVA — una imagen guia, una respiracion, un gesto interior, una escena de su propia vida; la forma la eliges tu segun lo que la charla pida, nunca como plantilla repetida.
+- Construyela SOLO con lo que la persona realmente compartio en ESTA charla: sin charla no hay meditacion. Si compartio poco, hazla mas breve y anclada en lo poco que si dijo; JAMAS inventes detalles, nombres o situaciones que no dio.
 - En segunda persona, tiempo presente, ${extension}, con pausas naturales, hecha para escucharse en voz.
 - Si la persona nombro algo con sus palabras, usa SUS palabras, no tus sinonimos.
 - La intencion es que lo que la fuente propone ocurra en su vida; no prometas resultados ni cura.`;

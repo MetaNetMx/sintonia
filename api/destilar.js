@@ -24,6 +24,8 @@ const SISTEMA_DESTILADOR = `Eres el destilador de fuentes de una plataforma de a
 
 Recibiras el TEXTO CRUDO de una charla reflexiva/espiritual (la "fuente"). Para quien la comparte y su comunidad, esta ensenanza es material vivo y sagrado: destilala con cuidado y fidelidad, sin caricaturizarla ni diluirla.
 
+ANALISIS RIGUROSO: toma un respiro y analiza la charla PASO A PASO — identifica sus tesis principales, sus conceptos clave (p. ej. fractales, calibracion, codigos de informacion) y sus propuestas practicas. El destilado debe permitir que las conversaciones traten la fuente como una INVITACION formal a indagar y explorar, no como texto a recitar.
+
 Entrega el resultado LLAMANDO la herramienta entregar_destilado, con EXACTAMENTE esta forma en sus campos:
 {
   "resumen": "2 o 3 frases que capturan lo esencial de la charla",

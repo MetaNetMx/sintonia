@@ -66,8 +66,10 @@ export default function Meditaciones() {
         Meditaciones
       </h1>
       <p className="mt-2 max-w-prose text-[var(--color-texto-suave)]">
-        Prácticas guiadas para volver al cuerpo y a la respiración. Un marco de
-        exploración y calma, a tu ritmo.
+        Las meditaciones a tu medida <strong>nacen de tus charlas</strong> (la
+        Sesión exprés y la conversación por voz): sin charla no hay meditación,
+        porque le faltaría tu contexto. Aquí las re-escuchas; abajo hay también
+        una guía breve de ejemplo, editable.
       </p>
 
       <label htmlFor="guion" className="mt-6 block text-sm text-[var(--color-texto-suave)]">

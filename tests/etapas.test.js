@@ -43,6 +43,11 @@ describe('directores de la sesion expres', () => {
     expect(director).toContain(`"${eje.titulo}"`);
     expect(director).toMatch(/HAGA VIVIR/);
     expect(director).toMatch(/no prometas resultados ni cura/i);
+    // Invitacion creativa de la fuente, y NUNCA sin contexto de la charla.
+    expect(director).toMatch(/INVITACION de la fuente/);
+    expect(director).toMatch(/de forma CREATIVA/);
+    expect(director).toMatch(/sin charla no hay meditacion/i);
+    expect(director).toMatch(/JAMAS inventes/);
   });
 
   it('configuracion expres: 4 pasos visibles, texto acotado, esfuerzo bajo', () => {
