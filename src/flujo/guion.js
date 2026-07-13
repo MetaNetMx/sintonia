@@ -107,18 +107,24 @@ export function guionValido(g) {
   if (!g || typeof g !== 'object') return false;
   if (!textoConSustancia(g.esencia)) return false;
   if (!textoConSustancia(g.preguntaApertura)) return false;
-  if (!Array.isArray(g.ejes) || g.ejes.length < 1) return false;
+  // 3 a 6 ejes con ids UNICOS (auditoria 2026-07-12): el contrato del PRD
+  // pide 3-5 y el respaldo neutro cumple el minimo.
+  if (!Array.isArray(g.ejes) || g.ejes.length < 3 || g.ejes.length > 6) return false;
+  const ids = new Set(g.ejes.map((e) => e?.id));
+  if (ids.size !== g.ejes.length) return false;
   return g.ejes.every(
     (e) =>
       e &&
       typeof e.id === 'string' &&
       ID_KEBAB.test(e.id) &&
       textoConSustancia(e.titulo) &&
+      textoConSustancia(e.idea) &&
       Array.isArray(e.preguntas) &&
       e.preguntas.length >= 2 &&
       e.preguntas.every(textoConSustancia) &&
       e.practica &&
       textoConSustancia(e.practica.titulo) &&
+      textoConSustancia(e.practica.marco) &&
       Array.isArray(e.practica.pasos) &&
       e.practica.pasos.length >= 2 &&
       e.practica.pasos.every(textoConSustancia)
@@ -166,6 +172,42 @@ export function respaldoNeutro(fuente) {
             'Despues, anota en una linea que cambio al mirarlo asi.',
           ],
           marco: `Derivado directamente de "${titulo}".`,
+        },
+      },
+      {
+        id: 'mirada-a-una-relacion',
+        titulo: 'Verla en una relacion',
+        idea: 'Las ensenanzas se vuelven reales cuando se miran dentro de un vinculo concreto.',
+        preguntas: [
+          '¿En cual de tus relaciones se nota mas lo que la fuente propone, y en que momento tipico?',
+          '¿Que haces tu normalmente en ese momento, y que pasaria si esta semana lo miraras con la propuesta de la fuente?',
+        ],
+        practica: {
+          titulo: 'Un encuentro con atencion',
+          pasos: [
+            'Elige UN encuentro de esta semana con esa persona.',
+            'Antes del encuentro, recuerda la propuesta de la fuente en una frase.',
+            'Despues, anota que notaste distinto en ti (no en la otra persona).',
+          ],
+          marco: `Invitacion de "${titulo}" llevada a un vinculo real.`,
+        },
+      },
+      {
+        id: 'un-gesto-pequeno',
+        titulo: 'Un gesto pequeno y visible',
+        idea: 'Un cambio de conciencia se ancla mejor en un gesto pequeno y repetible que en una intencion grande.',
+        preguntas: [
+          '¿Que gesto pequeno (de un minuto o menos) expresaria lo que la fuente te propone?',
+          '¿En que momento fijo del dia podrias hacerlo, para no depender de acordarte?',
+        ],
+        practica: {
+          titulo: 'El gesto de la semana',
+          pasos: [
+            'Define el gesto en una frase que empiece con un verbo.',
+            'Ancalo a algo que ya haces todos los dias (cafe, camino, ducha).',
+            'Al septimo dia, decide si lo conservas, lo ajustas o lo sueltas.',
+          ],
+          marco: `Derivado de "${titulo}": de la ensenanza al cuerpo.`,
         },
       },
     ],

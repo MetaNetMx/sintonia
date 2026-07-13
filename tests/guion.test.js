@@ -26,7 +26,13 @@ describe('guionValido', () => {
 
   it('endurecido (auditoria 2026-07-09): id kebab, 2 preguntas, 2+ pasos con sustancia', () => {
     const base = GUION_RESPALDO.ejes[0];
-    const conEje = (eje) => ({ ...GUION_RESPALDO, ejes: [{ ...base, ...eje }] });
+    // Muta solo el primer eje: el resto del guion sigue siendo valido, asi
+    // que el rechazo se debe a la mutacion (no al numero de ejes).
+    const conEje = (eje) => ({
+      ...GUION_RESPALDO,
+      ejes: [{ ...base, ...eje }, GUION_RESPALDO.ejes[1], GUION_RESPALDO.ejes[2]],
+    });
+    expect(guionValido(conEje({}))).toBe(true); // sanidad del arnes
     expect(guionValido(conEje({ id: 'ID Invalido!' }))).toBe(false);
     expect(guionValido(conEje({ preguntas: ['una sola'] }))).toBe(false);
     expect(guionValido(conEje({ preguntas: ['ok', '   '] }))).toBe(false);
@@ -34,6 +40,21 @@ describe('guionValido', () => {
       false,
     );
     expect(guionValido(conEje({ practica: { ...base.practica, titulo: '' } }))).toBe(false);
+  });
+
+  it('endurecido (auditoria 2026-07-12): 3+ ejes, ids unicos, idea y marco', () => {
+    const base = GUION_RESPALDO.ejes[0];
+    const conEje = (eje) => ({
+      ...GUION_RESPALDO,
+      ejes: [{ ...base, ...eje }, GUION_RESPALDO.ejes[1], GUION_RESPALDO.ejes[2]],
+    });
+    // Menos de 3 ejes: rechazado (un solo eje ya no pasa).
+    expect(guionValido({ ...GUION_RESPALDO, ejes: [base] })).toBe(false);
+    // Ids duplicados: rechazado.
+    expect(guionValido(conEje({ id: GUION_RESPALDO.ejes[1].id }))).toBe(false);
+    // Sin idea o sin marco: rechazado.
+    expect(guionValido(conEje({ idea: '  ' }))).toBe(false);
+    expect(guionValido(conEje({ practica: { ...base.practica, marco: '' } }))).toBe(false);
   });
 });
 

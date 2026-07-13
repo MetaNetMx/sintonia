@@ -3,7 +3,7 @@ import { useAcompanamiento } from '../ia/useAcompanamiento.js';
 import { componerSistema } from '../ia/prompts.js';
 import { cargarFuenteActiva, lenteDeFuente } from '../fuentes/dinamicas.js';
 import { obtenerGuion } from '../flujo/guion.js';
-import { directorVoz, separarMeditacion } from '../flujo/etapas.js';
+import { directorVoz, separarEje, separarMeditacion } from '../flujo/etapas.js';
 import { iniciarGrabacion, soportaGrabacion } from '../voz/clonacion.js';
 import { transcribir } from '../voz/transcribir.js';
 import { listarVoces } from '../voz/voces.js';
@@ -39,13 +39,28 @@ export default function Conversacion() {
     };
   }, []);
 
+  // Eje elegido en el turno 1 (marcador "EJE:" que la app parsea y retira):
+  // los turnos siguientes y la meditacion lo usan de forma DETERMINISTA
+  // (hallazgo Media 2026-07-12) en vez de confiar en la memoria del modelo.
+  const ejeIdRef = useRef(null);
+  const guionRef = useRef(null);
+  guionRef.current = guion;
+
+  const transformarRespuesta = useCallback((texto) => {
+    const { ejeId, contenido } = separarEje(texto, guionRef.current?.ejes || []);
+    if (ejeId) ejeIdRef.current = ejeId;
+    return contenido;
+  }, []);
+
   const sistema = useCallback(
     ({ turno }) =>
-      componerSistema({ lente: lenteDeFuente(fuente) }) + '\n\n' + directorVoz({ guion, turno }),
+      componerSistema({ lente: lenteDeFuente(fuente) }) +
+      '\n\n' +
+      directorVoz({ guion, turno, ejeId: ejeIdRef.current }),
     [guion, fuente]
   );
   const { mensajes, cargando, error, crisis, enviar, reconocerCrisis, reiniciar } =
-    useAcompanamiento({ sistema, maxTokens: MAX_TOKENS_VOZ, esfuerzo: 'low' });
+    useAcompanamiento({ sistema, maxTokens: MAX_TOKENS_VOZ, esfuerzo: 'low', transformarRespuesta });
   const tts = useTTS();
 
   const [grabando, setGrabando] = useState(false);
@@ -55,6 +70,9 @@ export default function Conversacion() {
   const [voces, setVoces] = useState([]);
   const [voiceId, setVoiceId] = useState('');
   const [mostrarTexto, setMostrarTexto] = useState(true);
+  // Solo se afirma "meditacion guardada" si de verdad llego una meditacion
+  // (hallazgo Alta 2026-07-12: tres errores de IA no deben fingir un cierre).
+  const [meditacionLista, setMeditacionLista] = useState(false);
 
   const controlRef = useRef(null);
   const ultimoHabladoRef = useRef(null);
@@ -71,12 +89,14 @@ export default function Conversacion() {
     };
   }, []);
 
-  // Si la persona clono su voz, la conversacion la usa por defecto (puede
-  // cambiarla en el selector).
-  const { vozPropia } = useVozPropia();
+  // La voz clonada solo entra a la conversacion con el opt-in explicito
+  // "usos.conversaciones" (hallazgo Alta 2026-07-12): el consentimiento base
+  // cubre meditaciones, no leer respuestas de la IA con la voz de la persona.
+  const { vozPropia, vozEnConversacion } = useVozPropia();
+  const vozPropiaPermitida = vozEnConversacion ? vozPropia : null;
   useEffect(() => {
-    if (vozPropia) setVoiceId((actual) => actual || vozPropia);
-  }, [vozPropia]);
+    if (vozPropiaPermitida) setVoiceId((actual) => actual || vozPropiaPermitida);
+  }, [vozPropiaPermitida]);
 
   // Reproducir automaticamente la ultima respuesta del asistente. Si trae
   // MEDITACION: (cierre del turno 3), se separa: se habla completa (cierre +
@@ -99,11 +119,13 @@ export default function Conversacion() {
     });
 
     if (meditacion) {
+      setMeditacionLista(true);
       import('../datos/meditaciones.js')
         .then((m) =>
           m.guardarMeditacion({
             texto: meditacion,
             fuenteId: fuente?.id || null,
+            ejeId: ejeIdRef.current,
             titulo: fuente?.titulo
               ? `Meditación — ${fuente.titulo} (voz)`
               : 'Meditación — conversación por voz',
@@ -116,8 +138,20 @@ export default function Conversacion() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mensajes]);
 
+  // Suelta el microfono si la persona sale de la pantalla a media grabacion
+  // (hallazgo Alta 2026-07-12).
+  useEffect(() => {
+    return () => {
+      if (controlRef.current) {
+        controlRef.current.cancelar();
+        controlRef.current = null;
+      }
+    };
+  }, []);
+
   const iniciar = async () => {
-    if (!puedeConversar) return;
+    // controlRef como candado: clics rapidos no deben abrir varios streams.
+    if (!puedeConversar || grabando || controlRef.current) return;
     setErrorVoz(null);
     tts.detener();
     try {
@@ -151,15 +185,16 @@ export default function Conversacion() {
   };
 
   const ocupado = cargando || procesando;
-  // Compuerta de estados (hallazgo Media 2026-07-09):
+  // Compuerta de estados (hallazgos Media 2026-07-09 y Alta 2026-07-12):
   // - listo: no se conversa hasta tener fuente Y guion (evita que el primer
   //   turno use la lente estatica mientras carga la dinamica).
-  // - sesionCerrada: el turno 3 cierra con practica y meditacion; despues se
-  //   invita a una conversacion nueva (el director tambien lo respalda).
+  // - sesionCerrada: cuenta RESPUESTAS COMPLETADAS del asistente (un error de
+  //   la IA no cierra la sesion); el 3er intercambio cierra con practica y
+  //   meditacion (el director tambien lo respalda).
   // - contencion: crisis alta = estado terminal; el hook ademas bloquea enviar.
   const listo = Boolean(fuente && guion);
-  const turnosUsuario = mensajes.filter((m) => m.rol === 'usuario').length;
-  const sesionCerrada = turnosUsuario >= 3 && !cargando;
+  const respuestas = mensajes.filter((m) => m.rol === 'asistente').length;
+  const sesionCerrada = respuestas >= 3 && !cargando;
   const contencion = crisis.nivel === 'alto';
   const puedeConversar = listo && !sesionCerrada && !contencion;
 
@@ -175,6 +210,8 @@ export default function Conversacion() {
   const nuevaConversacion = () => {
     tts.detener();
     ultimoHabladoRef.current = null;
+    ejeIdRef.current = null;
+    setMeditacionLista(false);
     setTexto('');
     setErrorVoz(null);
     reiniciar();
@@ -203,7 +240,7 @@ export default function Conversacion() {
             className="rounded-[var(--radius-suave)] border border-[var(--color-borde)] bg-[var(--color-superficie)] px-3 py-1.5 text-sm text-[var(--color-texto)]"
           >
             <option value="">Voz por defecto</option>
-            {vozPropia && <option value={vozPropia}>Mi voz</option>}
+            {vozPropiaPermitida && <option value={vozPropiaPermitida}>Mi voz</option>}
             {voces.map((v) => (
               <option key={v.voiceId} value={v.voiceId}>
                 {v.nombre}
@@ -243,13 +280,16 @@ export default function Conversacion() {
               {!esUsuario && (
                 <button
                   type="button"
-                  onClick={() =>
+                  onClick={() => {
+                    // Igual que la reproduccion automatica: sin marcador y con
+                    // el estilo correcto (hallazgo Media 2026-07-12).
+                    const { cierre, meditacion } = separarMeditacion(mensaje.contenido);
                     tts.hablar({
-                      texto: mensaje.contenido,
+                      texto: meditacion ? `${cierre}\n\n${meditacion}` : mensaje.contenido,
                       voiceId: voiceId || undefined,
-                      estilo: 'conversacion',
-                    })
-                  }
+                      estilo: meditacion ? 'meditacion' : 'conversacion',
+                    });
+                  }}
                   className="text-xs text-[var(--color-acento)]"
                   aria-label="Escuchar esta respuesta de nuevo"
                 >
@@ -307,8 +347,15 @@ export default function Conversacion() {
       {sesionCerrada && !contencion && (
         <div className="mt-5 rounded-[var(--radius-suave)] border border-[var(--color-borde)] bg-[var(--color-superficie)] p-5">
           <p className="max-w-prose text-[var(--color-texto-suave)]">
-            La charla cerró con una práctica y tu meditación quedó guardada en
-            <strong> Meditaciones</strong> para re-escucharla cuando quieras.
+            {meditacionLista ? (
+              <>
+                La charla cerró con una práctica y tu meditación quedó guardada
+                en <strong>Meditaciones</strong> para re-escucharla cuando
+                quieras.
+              </>
+            ) : (
+              <>La charla llegó a su cierre.</>
+            )}
           </p>
           <button
             type="button"

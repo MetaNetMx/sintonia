@@ -16,15 +16,18 @@ export const CLAVE_CONSENTIMIENTO_VOZ = 'voz';
  * @throws Si IndexedDB no esta disponible o la escritura falla — el llamador
  *         DEBE tratar el fallo como "consentimiento no registrado".
  */
-export async function guardarConsentimientoVoz({ casillas } = {}) {
+export async function guardarConsentimientoVoz({ casillas, usos } = {}) {
   // Si ya habia consentimiento con voz clonada, el voiceId se CONSERVA:
   // aceptar de nuevo no debe perder la unica referencia para borrar esa voz
   // en el proveedor (hallazgo Alta de la auditoria 2026-07-09: antes se
-  // restablecia a null y la voz quedaba huerfana).
+  // restablecia a null y la voz quedaba huerfana). Los USOS previos tambien
+  // se conservan salvo que se pasen explicitamente.
   let voiceIdPrevio = null;
+  let usosPrevios = null;
   try {
     const previo = await leerConsentimientoVoz();
     if (previo?.voiceId) voiceIdPrevio = previo.voiceId;
+    if (previo?.usos) usosPrevios = previo.usos;
   } catch {
     /* sin registro previo legible: si la DB esta rota, el put de abajo fallara */
   }
@@ -35,10 +38,36 @@ export async function guardarConsentimientoVoz({ casillas } = {}) {
     otorgado: true,
     fecha: new Date().toISOString(),
     casillas: { ...(casillas || {}) },
+    // Usos de la voz clonada (hallazgo Alta 2026-07-12): guiar meditaciones
+    // es el uso base consentido; usarla en CONVERSACIONES (leer respuestas de
+    // la IA con la voz de la persona) requiere opt-in explicito, apagado por
+    // defecto.
+    usos: {
+      meditaciones: true,
+      conversaciones: usos
+        ? usos.conversaciones === true
+        : usosPrevios?.conversaciones === true,
+    },
     // Se llena al clonar la voz (asignarVoiceId); necesario para poder
     // borrarla tambien en el proveedor al revocar.
     voiceId: voiceIdPrevio,
   };
+  await put(STORES.CONSENTIMIENTOS, registro);
+  return registro;
+}
+
+/**
+ * Activa o desactiva el uso de la voz clonada en CONVERSACIONES (opt-in,
+ * revocable en cualquier momento). Requiere consentimiento vigente.
+ * @param {boolean} permitido
+ */
+export async function establecerUsoConversacionVoz(permitido) {
+  const registro = await leerConsentimientoVoz();
+  if (!registro || registro.otorgado !== true) {
+    throw new Error('No hay consentimiento de voz registrado.');
+  }
+  registro.usos = { meditaciones: true, ...(registro.usos || {}), conversaciones: permitido === true };
+  registro.actualizadoEn = new Date().toISOString();
   await put(STORES.CONSENTIMIENTOS, registro);
   return registro;
 }

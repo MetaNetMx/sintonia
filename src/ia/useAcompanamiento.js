@@ -42,11 +42,13 @@ async function persistir(conversacionId, mensajes) {
   return conversacionId;
 }
 
-// useAcompanamiento({ sistema, maxTokens, esfuerzo }) => API del chat
+// useAcompanamiento({ sistema, maxTokens, esfuerzo, transformarRespuesta }) => API del chat
 // `sistema` puede ser un string fijo o una funcion ({ turno }) => string, donde
-// turno = numero de intervenciones de la persona (1 = primera). Los directores
-// por turno permiten que el modo voz dirija la charla hacia algo concreto.
-export function useAcompanamiento({ sistema, maxTokens, esfuerzo } = {}) {
+// turno = numero de INTERCAMBIOS COMPLETADOS + 1 (una respuesta fallida de la
+// IA no consume turno — hallazgo Alta 2026-07-12). `transformarRespuesta`
+// (opcional) recibe el texto crudo del asistente y devuelve el texto a
+// mostrar/persistir (p. ej. para extraer marcadores como "EJE:").
+export function useAcompanamiento({ sistema, maxTokens, esfuerzo, transformarRespuesta } = {}) {
   const [mensajes, setMensajes] = useState([]);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState(null);
@@ -106,7 +108,10 @@ export function useAcompanamiento({ sistema, maxTokens, esfuerzo } = {}) {
       }
 
       // 3) Enviar a la IA por el proxy, con el director del turno actual.
-      const turno = hiloConUsuario.filter((m) => m.rol === 'usuario').length;
+      // El turno se cuenta por INTERCAMBIOS COMPLETADOS (respuestas del
+      // asistente), no por mensajes de la persona: un error de la IA no debe
+      // avanzar la sesion (hallazgo Alta 2026-07-12).
+      const turno = hiloConUsuario.filter((m) => m.rol === 'asistente').length + 1;
       const sistemaTurno =
         typeof sistema === 'function' ? sistema({ turno }) : sistema || SISTEMA_ACOMPANAMIENTO;
 
@@ -119,9 +124,14 @@ export function useAcompanamiento({ sistema, maxTokens, esfuerzo } = {}) {
           ...(esfuerzo ? { esfuerzo } : {}),
         });
 
-        // 4) Evaluar senales de crisis tambien en la respuesta recibida.
+        // 4) Evaluar senales de crisis tambien en la respuesta recibida
+        // (sobre el texto CRUDO, antes de cualquier transformacion).
         const senalRespuesta = detectarSenalesCrisis(respuestaTexto);
-        const msjAsistente = crearMensaje('asistente', respuestaTexto);
+        const textoFinal =
+          typeof transformarRespuesta === 'function'
+            ? transformarRespuesta(respuestaTexto)
+            : respuestaTexto;
+        const msjAsistente = crearMensaje('asistente', textoFinal);
 
         const hiloFinal = await new Promise((resolve) => {
           setMensajes((prev) => {
@@ -147,7 +157,7 @@ export function useAcompanamiento({ sistema, maxTokens, esfuerzo } = {}) {
         setCargando(false);
       }
     },
-    [cargando, sistema, maxTokens, esfuerzo, crisis.nivel]
+    [cargando, sistema, maxTokens, esfuerzo, crisis.nivel, transformarRespuesta]
   );
 
   return {

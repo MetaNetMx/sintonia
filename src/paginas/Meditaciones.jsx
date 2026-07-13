@@ -20,7 +20,17 @@ export default function Meditaciones() {
 
   // La voz clonada de la persona (si existe): las meditaciones se escuchan
   // con SU voz — "escucharte a ti mismo guiandote" (PRD §6).
-  const { vozPropia, recargarVozPropia } = useVozPropia();
+  const { vozPropia, vozEnConversacion, recargarVozPropia } = useVozPropia();
+
+  const cambiarUsoConversacion = async (permitido) => {
+    try {
+      const m = await import('../datos/consentimientos.js');
+      await m.establecerUsoConversacionVoz(permitido);
+      recargarVozPropia();
+    } catch {
+      /* sin persistencia disponible */
+    }
+  };
   const escuchar = (t) =>
     hablar({ texto: t, voiceId: vozPropia || undefined, estilo: 'meditacion' });
 
@@ -213,6 +223,19 @@ export default function Meditaciones() {
             >
               Probar mi voz
             </button>
+
+            <label className="mt-4 flex cursor-pointer items-start gap-3 text-sm text-[var(--color-texto-suave)]">
+              <input
+                type="checkbox"
+                checked={vozEnConversacion}
+                onChange={(e) => cambiarUsoConversacion(e.target.checked)}
+                className="mt-0.5 h-5 w-5 accent-[var(--color-acento)]"
+              />
+              <span>
+                Usar mi voz también en las conversaciones (las respuestas de la
+                IA sonarán con mi voz). Puedes cambiarlo cuando quieras.
+              </span>
+            </label>
           </div>
         )}
       </div>

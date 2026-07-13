@@ -17,6 +17,25 @@ import {
 
 const VOICES_URL = 'https://api.elevenlabs.io/v1/voices';
 
+// PROPIEDAD (hallazgo Alta 2026-07-12): este endpoint solo borra voces
+// CLONADAS creadas por esta app (etiqueta app=sintonia, o la descripcion que
+// esta app escribe — voces clonadas antes de existir la etiqueta). Nunca
+// borra voces de catalogo/premade ni voces ajenas de la cuenta.
+export function esVozBorrable(voz) {
+  if (!voz || typeof voz !== 'object') return false;
+  if (voz.category !== 'cloned') return false;
+  let labels = voz.labels;
+  if (typeof labels === 'string') {
+    try {
+      labels = JSON.parse(labels);
+    } catch {
+      labels = null;
+    }
+  }
+  if (labels && labels.app === 'sintonia') return true;
+  return /consentimiento explicito/i.test(String(voz.description || ''));
+}
+
 export default async function handler(req, res) {
   if (!aplicarCorsMismoOrigen(req, res)) {
     return responderError(res, 403, 'Origen no autorizado');
@@ -39,6 +58,25 @@ export default async function handler(req, res) {
   }
 
   try {
+    // 1) Verificar PROPIEDAD antes de borrar: la voz debe ser un clon creado
+    // por esta app. 404 = ya no existe: la revocacion ya se cumplio.
+    const consulta = await fetch(`${VOICES_URL}/${encodeURIComponent(voiceId)}`, {
+      headers: { 'xi-api-key': ELEVENLABS_API_KEY, Accept: 'application/json' },
+    });
+    if (consulta.status === 404) {
+      return responderJSON(res, 200, { borrado: true });
+    }
+    if (!consulta.ok) {
+      console.error('[api/voz-borrar] consulta de voz respondio', consulta.status);
+      return responderError(res, 502, 'No se pudo borrar la voz en el proveedor', 'fallo_proveedor');
+    }
+    const voz = await consulta.json();
+    if (!esVozBorrable(voz)) {
+      console.error('[api/voz-borrar] rechazado: la voz no fue creada por esta app');
+      return responderError(res, 403, 'Esa voz no fue creada por esta app', 'voz_no_propia');
+    }
+
+    // 2) Borrado real.
     const upstream = await fetch(`${VOICES_URL}/${encodeURIComponent(voiceId)}`, {
       method: 'DELETE',
       headers: { 'xi-api-key': ELEVENLABS_API_KEY, Accept: 'application/json' },

@@ -22,6 +22,7 @@ import {
   directorElegirEje,
   directorConcretar,
   directorPractica,
+  separarEje,
   separarMeditacion,
 } from './etapas.js';
 
@@ -48,17 +49,7 @@ function paraCliente(mensajes) {
   return salida;
 }
 
-// Extrae el marcador "EJE: <id>" de la primera linea de la respuesta.
-function separarEje(texto, ejes) {
-  const m = texto.match(/^\s*EJE:\s*([a-z0-9-]+)\s*\n?/i);
-  if (!m) return { ejeId: null, contenido: texto.trim() };
-  const id = m[1].toLowerCase();
-  const existe = ejes.some((e) => e.id === id);
-  return {
-    ejeId: existe ? id : null,
-    contenido: texto.slice(m[0].length).trim(),
-  };
-}
+// separarEje y separarMeditacion viven en etapas.js (los comparte la voz).
 
 // separarMeditacion vive en etapas.js (la comparte la conversacion por voz).
 

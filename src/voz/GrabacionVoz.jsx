@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { iniciarGrabacion, soportaGrabacion, clonarVoz } from './clonacion.js';
 
 // Grabacion de muestras + clonacion de la voz propia (PRD §6, deuda §13
@@ -29,7 +29,21 @@ export default function GrabacionVoz({ onCreada }) {
   const segundosTotales = Math.round(muestras.reduce((s, m) => s + m.segundos, 0));
   const listaParaCrear = muestras.length > 0 && segundosTotales >= MIN_SEGUNDOS_TOTAL;
 
+  // Suelta el microfono si la persona sale de la pantalla a media grabacion
+  // (hallazgo Alta 2026-07-12: el stream quedaba vivo al desmontar).
+  useEffect(() => {
+    return () => {
+      if (controlRef.current) {
+        controlRef.current.cancelar();
+        controlRef.current = null;
+      }
+    };
+  }, []);
+
   const empezar = async () => {
+    // controlRef como candado: clics rapidos no deben abrir varios streams
+    // de getUserMedia (solo el ultimo quedaria bajo control).
+    if (grabando || creando || controlRef.current) return;
     setMensaje('');
     try {
       controlRef.current = await iniciarGrabacion();

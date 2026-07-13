@@ -46,6 +46,26 @@ export function directorConcretar(eje) {
 }
 
 /**
+ * Extrae el marcador "EJE: <id>" de la primera linea de una respuesta.
+ * Lo comparten la sesion expres (useFlujo) y la conversacion por voz
+ * (hallazgo Media 2026-07-12: el eje de voz ahora se parsea y persiste en
+ * vez de confiar en que el modelo lo recuerde implicitamente).
+ * @param {string} texto
+ * @param {Array<{id: string}>} ejes
+ * @returns {{ ejeId: string|null, contenido: string }}
+ */
+export function separarEje(texto, ejes) {
+  const m = String(texto || '').match(/^\s*EJE:\s*([a-z0-9-]+)\s*\n?/i);
+  if (!m) return { ejeId: null, contenido: String(texto || '').trim() };
+  const id = m[1].toLowerCase();
+  const existe = (ejes || []).some((e) => e.id === id);
+  return {
+    ejeId: existe ? id : null,
+    contenido: texto.slice(m[0].length).trim(),
+  };
+}
+
+/**
  * Separa la meditacion final marcada con "MEDITACION:" del resto del texto.
  * La usan la sesion expres (useFlujo) y la conversacion por voz (Conversacion)
  * para mostrar/guardar la meditacion como pieza propia.
@@ -110,10 +130,12 @@ export function instruccionMeditacion({ eje, formato } = {}) {
  * en audio la charla debe ser MUY corta y dirigida — la fuente no es adorno,
  * se comprende y se aplica. En ~3 turnos la nota de voz aterriza en UNA
  * practica concreta derivada del guion de la fuente.
- * @param {{ guion: object|null, turno: number }} params  turno = numero de
- *   intervenciones de la persona (1 = primera nota de voz).
+ * @param {{ guion: object|null, turno: number, ejeId?: string|null }} params
+ *   turno = numero de intercambios completados + 1. ejeId = eje elegido en el
+ *   turno 1 (marcador "EJE:" parseado por la app); con el, los turnos 2-3
+ *   trabajan SOLO ese eje de forma determinista.
  */
-export function directorVoz({ guion, turno }) {
+export function directorVoz({ guion, turno, ejeId }) {
   const base = `CONVERSACION POR VOZ (turno ${turno}). La persona habla por notas de voz y tu respuesta se ESCUCHA, no se lee: maximo 2 o 3 frases habladas, naturales y calidas, en espanol de Mexico. Nada de listas ni formato. Una sola idea o UNA pregunta por turno. La charla NO es abierta: tu la diriges, con suavidad, hacia algo concreto de la fuente.`;
 
   if (!guion) {
@@ -121,26 +143,29 @@ export function directorVoz({ guion, turno }) {
 Aun no hay guion de la fuente: escucha, refleja en una frase y devuelve UNA pregunta concreta.`;
   }
 
-  const ejes = resumenEjes(guion);
+  // Con el eje ya elegido (turnos 2-3), el director trabaja SOLO ese eje.
+  const ejeElegido = ejeId ? guion.ejes.find((e) => e.id === ejeId) : null;
+  const ejes = resumenEjes(ejeElegido ? { ejes: [ejeElegido] } : guion);
+
   if (turno <= 1) {
     return `${base}
 EJES DEL GUION DE LA FUENTE (compréndelos; no los recites):
 ${ejes}
-Elige en silencio el UNICO eje que mas resuene con lo que dijo (no anuncies el eje ni su nombre). Responde: 1 frase que refleje lo dicho a traves de ese eje + la primera pregunta del eje, adaptada a sus palabras.`;
+Elige el UNICO eje que mas resuene con lo que dijo. Tu respuesta DEBE empezar exactamente con la linea "EJE: <id>" (uno de los ids listados; la app la retira antes de mostrar y reproducir — la persona no la ve ni la escucha). Despues: 1 frase que refleje lo dicho a traves de ese eje + la primera pregunta del eje, adaptada a sus palabras. No anuncies el nombre del eje en lo hablado.`;
   }
   if (turno === 2) {
     return `${base}
-EJES DEL GUION (sigue en el eje que elegiste en el turno anterior):
+${ejeElegido ? 'EJE ELEGIDO EN ESTA CHARLA (trabaja solo este):' : 'EJES DEL GUION (sigue en el eje que elegiste en el turno anterior):'}
 ${ejes}
 Una frase de reconocimiento + la segunda pregunta del eje, concreta y adaptada a sus palabras.`;
   }
   if (turno === 3) {
     return `${base}
-EJES DEL GUION (sigue en el eje ya elegido):
+${ejeElegido ? 'EJE ELEGIDO EN ESTA CHARLA (trabaja solo este):' : 'EJES DEL GUION (sigue en el eje ya elegido):'}
 ${ejes}
 CIERRE PRACTICO — no alargues mas la charla: propon LA practica del eje, personalizada con SUS palabras, en maximo 3 frases habladas: que hacer, cuando, y como notara que la hizo. Es propuesta, no obligacion; no prometas resultados. Despidete en UNA frase que le devuelva su autoridad interna; no hagas mas preguntas.
 Al final, en una linea aparte que empiece EXACTAMENTE con "MEDITACION:", agrega la meditacion hablada que cierra la charla (la app la separa, la guarda para re-escucharla y la reproduce).
-${instruccionMeditacion({ formato: 'voz' })}`;
+${instruccionMeditacion({ eje: ejeElegido, formato: 'voz' })}`;
   }
 
   // Turno 4 en adelante: la sesion ya cerro (la UI ademas bloquea el envio;

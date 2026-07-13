@@ -32,4 +32,12 @@ describe('metodo del analista en el system prompt', () => {
     expect(s).toMatch(/AMBAS perspectivas/);
     expect(s).toMatch(/La persona siempre decide/);
   });
+
+  it('invita, no presiona (auditoria 2026-07-12): permiso antes de confrontar', () => {
+    const s = SISTEMA_ACOMPANAMIENTO;
+    expect(s).not.toMatch(/obligue/);
+    expect(s).toMatch(/la INVITE a pensar/);
+    expect(s).toMatch(/pide permiso/i);
+    expect(s).toMatch(/que ELLA misma quiera alcanzar/);
+  });
 });

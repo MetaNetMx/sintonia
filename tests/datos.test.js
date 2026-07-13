@@ -202,3 +202,32 @@ describe('re-consentir no pierde la voz clonada (auditoria 2026-07-09)', () => {
     expect(leido.casillas.biometrico).toBe(true);
   });
 });
+
+describe('usos de la voz clonada (auditoria 2026-07-12): opt-in por uso', () => {
+  it('el uso en conversaciones esta APAGADO por defecto', async () => {
+    await revocarConsentimientoVoz();
+    await guardarConsentimientoVoz({});
+    const leido = await leerConsentimientoVoz();
+    expect(leido.usos.meditaciones).toBe(true);
+    expect(leido.usos.conversaciones).toBe(false);
+  });
+
+  it('establecerUsoConversacionVoz activa/desactiva y persiste', async () => {
+    const { establecerUsoConversacionVoz } = await import('../src/datos/consentimientos.js');
+    await establecerUsoConversacionVoz(true);
+    expect((await leerConsentimientoVoz()).usos.conversaciones).toBe(true);
+    await establecerUsoConversacionVoz(false);
+    expect((await leerConsentimientoVoz()).usos.conversaciones).toBe(false);
+  });
+
+  it('re-consentir conserva el uso previo salvo eleccion explicita', async () => {
+    const { establecerUsoConversacionVoz } = await import('../src/datos/consentimientos.js');
+    await establecerUsoConversacionVoz(true);
+    // Re-consentir sin tocar usos: se conserva.
+    await guardarConsentimientoVoz({ casillas: { biometrico: true } });
+    expect((await leerConsentimientoVoz()).usos.conversaciones).toBe(true);
+    // Re-consentir eligiendo explicitamente apagado: gana la eleccion.
+    await guardarConsentimientoVoz({ usos: { conversaciones: false } });
+    expect((await leerConsentimientoVoz()).usos.conversaciones).toBe(false);
+  });
+});

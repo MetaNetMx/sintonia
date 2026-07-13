@@ -7,13 +7,20 @@ import { useCallback, useEffect, useState } from 'react';
 
 export function useVozPropia() {
   const [voiceId, setVoiceId] = useState(null);
+  // Uso en conversaciones: opt-in separado (hallazgo Alta 2026-07-12) — el
+  // consentimiento base cubre meditaciones; leer respuestas de la IA con la
+  // voz de la persona requiere permiso explicito, apagado por defecto.
+  const [enConversacion, setEnConversacion] = useState(false);
 
   const recargar = useCallback(() => {
     let vivo = true;
     import('../datos/consentimientos.js')
       .then((m) => m.leerConsentimientoVoz())
       .then((registro) => {
-        if (vivo) setVoiceId(registro?.otorgado === true ? registro.voiceId || null : null);
+        if (!vivo) return;
+        const otorgado = registro?.otorgado === true;
+        setVoiceId(otorgado ? registro.voiceId || null : null);
+        setEnConversacion(otorgado && registro?.usos?.conversaciones === true);
       })
       .catch(() => {
         /* sin persistencia disponible */
@@ -25,5 +32,5 @@ export function useVozPropia() {
 
   useEffect(recargar, [recargar]);
 
-  return { vozPropia: voiceId, recargarVozPropia: recargar };
+  return { vozPropia: voiceId, vozEnConversacion: enConversacion, recargarVozPropia: recargar };
 }

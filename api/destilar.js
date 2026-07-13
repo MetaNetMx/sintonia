@@ -111,6 +111,9 @@ const PATRONES_ZONA_ROJA = [
   /deja(r)?\s+(de\s+tomar\s+)?(el\s+|los\s+)?medicament/i,
   /(cura|sana)(cion|r)?\s+garantizada/i,
   /(diagnostic\w+|receta\w+)\s+(medic|clinic)/i,
+  /no\s+necesitas?\s+(medic\w+|doctor\w*|terapia|tratamiento|psicolog\w+|psiquiatr\w+)/i,
+  /(cura|sana)r?\s+(el|la|tu)?\s*(cancer|tumor|diabetes)/i,
+  /(enfermedad|sintoma)\w*\s+(es|son)\s+(solo\s+)?(informacion|energia|memoria)/i,
 ];
 
 export function zonaRojaEnLente(lente) {

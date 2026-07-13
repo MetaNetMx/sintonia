@@ -78,18 +78,23 @@ function guionValido(g) {
   if (!g || typeof g !== 'object') return false;
   if (!textoConSustancia(g.esencia)) return false;
   if (!textoConSustancia(g.preguntaApertura)) return false;
-  if (!Array.isArray(g.ejes) || g.ejes.length < 1) return false;
+  // 3 a 6 ejes con ids UNICOS, idea y marco (auditoria 2026-07-12).
+  if (!Array.isArray(g.ejes) || g.ejes.length < 3 || g.ejes.length > 6) return false;
+  const ids = new Set(g.ejes.map((e) => e?.id));
+  if (ids.size !== g.ejes.length) return false;
   return g.ejes.every(
     (e) =>
       e &&
       typeof e.id === 'string' &&
       ID_KEBAB.test(e.id) &&
       textoConSustancia(e.titulo) &&
+      textoConSustancia(e.idea) &&
       Array.isArray(e.preguntas) &&
       e.preguntas.length >= 2 &&
       e.preguntas.every(textoConSustancia) &&
       e.practica &&
       textoConSustancia(e.practica.titulo) &&
+      textoConSustancia(e.practica.marco) &&
       Array.isArray(e.practica.pasos) &&
       e.practica.pasos.length >= 2 &&
       e.practica.pasos.every(textoConSustancia)

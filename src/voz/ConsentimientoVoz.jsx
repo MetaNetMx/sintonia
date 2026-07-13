@@ -14,10 +14,10 @@ import { NOMBRE_APP } from '../config/app.js';
  * @param {Record<string, boolean>} casillas
  * @returns {Promise<boolean>}
  */
-async function guardarConsentimiento(casillas) {
+async function guardarConsentimiento(casillas, usos) {
   try {
     const modulo = await import('../datos/consentimientos.js');
-    await modulo.guardarConsentimientoVoz({ casillas });
+    await modulo.guardarConsentimientoVoz({ casillas, usos });
     return true;
   } catch (error) {
     console.error('[consentimiento-voz] no se pudo persistir:', error?.name || error);
@@ -51,6 +51,10 @@ const CASILLAS = [
  */
 export default function ConsentimientoVoz({ onAceptar, onRechazar }) {
   const [marcadas, setMarcadas] = useState({});
+  // Uso OPCIONAL de la voz en conversaciones (apagado por defecto): el
+  // consentimiento base cubre meditaciones; que las respuestas de la IA
+  // suenen con la voz de la persona es un opt-in aparte (auditoria 2026-07-12).
+  const [usoConversaciones, setUsoConversaciones] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [errorGuardado, setErrorGuardado] = useState('');
 
@@ -67,7 +71,10 @@ export default function ConsentimientoVoz({ onAceptar, onRechazar }) {
 
     // Sin evidencia persistida NO hay consentimiento: si falla el guardado,
     // se detiene aqui y se pide reintentar.
-    const persistido = await guardarConsentimiento({ ...marcadas });
+    const persistido = await guardarConsentimiento(
+      { ...marcadas },
+      { conversaciones: usoConversaciones }
+    );
     setGuardando(false);
     if (!persistido) {
       setErrorGuardado(
@@ -133,6 +140,13 @@ export default function ConsentimientoVoz({ onAceptar, onRechazar }) {
         </div>
       </dl>
 
+      <p className="mt-5 text-sm text-[var(--color-texto-suave)]">
+        <strong>Para qué se usa:</strong> tu voz clonada guía tus meditaciones.
+        Si además quieres que las <em>respuestas de la conversación</em> (análisis,
+        preguntas) suenen con tu voz, actívalo aparte abajo — es opcional y
+        puedes cambiarlo cuando quieras.
+      </p>
+
       <fieldset className="mt-6 space-y-3">
         <legend className="sr-only">Confirmaciones necesarias</legend>
         {CASILLAS.map((casilla) => (
@@ -150,6 +164,19 @@ export default function ConsentimientoVoz({ onAceptar, onRechazar }) {
           </label>
         ))}
       </fieldset>
+
+      <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-[var(--radius-suave)] border border-[var(--color-borde)] p-3 text-[var(--color-texto-suave)]">
+        <input
+          type="checkbox"
+          checked={usoConversaciones}
+          onChange={() => setUsoConversaciones((v) => !v)}
+          className="mt-1 h-5 w-5 accent-[var(--color-acento)]"
+        />
+        <span>
+          <strong className="text-[var(--color-texto)]">Opcional:</strong> usar mi voz
+          también en las conversaciones (las respuestas de la IA sonarán con mi voz).
+        </span>
+      </label>
 
       <div className="mt-7 flex flex-wrap gap-3">
         <button

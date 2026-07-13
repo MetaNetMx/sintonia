@@ -123,6 +123,9 @@ export default async function handler(req, res) {
       'description',
       'Voz clonada con consentimiento explicito del usuario. Dato biometrico.'
     );
+    // Etiqueta de PROPIEDAD (hallazgo Alta 2026-07-12): api/voz-borrar solo
+    // acepta borrar voces clonadas que lleven esta marca de la app.
+    form.append('labels', JSON.stringify({ app: 'sintonia' }));
     for (const a of archivos) {
       const blob = new Blob([a.bytes], { type: a.tipo });
       form.append('files', blob, a.nombreArchivo);

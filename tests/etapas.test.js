@@ -9,6 +9,7 @@ import {
   directorConcretar,
   directorPractica,
   directorVoz,
+  separarEje,
 } from '../src/flujo/etapas.js';
 import { GUION_RESPALDO } from '../src/flujo/guion.js';
 
@@ -59,13 +60,42 @@ describe('directores de la sesion expres', () => {
 });
 
 describe('directorVoz: la fuente dirige tambien la voz (decision 2026-07-09)', () => {
-  it('turno 1: recibe TODOS los ejes para comprenderlos y no anuncia el elegido', () => {
+  it('turno 1: recibe TODOS los ejes y elige con el marcador EJE: parseable', () => {
     const d = directorVoz({ guion: GUION_RESPALDO, turno: 1 });
     for (const eje of GUION_RESPALDO.ejes) {
       expect(d, eje.id).toContain(eje.id);
     }
-    expect(d).toMatch(/no anuncies el eje/i);
+    expect(d).toContain('EJE: <id>');
+    expect(d).toMatch(/la app la retira/i);
+    expect(d).toMatch(/no anuncies el nombre del eje/i);
     expect(d).toMatch(/2 o 3 frases/);
+  });
+
+  it('con el eje ya parseado, los turnos 2-3 trabajan SOLO ese eje (determinista)', () => {
+    const elegido = GUION_RESPALDO.ejes[1];
+    const otro = GUION_RESPALDO.ejes[0];
+    for (const turno of [2, 3]) {
+      const d = directorVoz({ guion: GUION_RESPALDO, turno, ejeId: elegido.id });
+      expect(d, `turno ${turno}`).toContain(elegido.id);
+      expect(d, `turno ${turno}`).not.toContain(otro.id);
+      expect(d, `turno ${turno}`).toMatch(/EJE ELEGIDO EN ESTA CHARLA/);
+    }
+    // La meditacion del turno 3 cita el eje elegido, no uno generico.
+    const d3 = directorVoz({ guion: GUION_RESPALDO, turno: 3, ejeId: elegido.id });
+    expect(d3).toContain(`"${elegido.titulo}"`);
+  });
+
+  it('separarEje extrae el marcador y limpia el contenido', () => {
+    const { ejeId, contenido } = separarEje(
+      `EJE: ${GUION_RESPALDO.ejes[0].id}\nHola, te escucho.`,
+      GUION_RESPALDO.ejes,
+    );
+    expect(ejeId).toBe(GUION_RESPALDO.ejes[0].id);
+    expect(contenido).toBe('Hola, te escucho.');
+    // Id desconocido: no truena, devuelve contenido limpio sin eje.
+    const r = separarEje('EJE: inexistente\nHola.', GUION_RESPALDO.ejes);
+    expect(r.ejeId).toBeNull();
+    expect(r.contenido).toBe('Hola.');
   });
 
   it('turno 3: cierra con LA practica del guion y sin mas preguntas', () => {
