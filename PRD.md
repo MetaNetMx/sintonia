@@ -209,9 +209,8 @@ No se avanza de fase sin cerrar la anterior con Ernesto.
 3. **Prototipo de un solo usuario** (Ernesto): sin autenticación multiusuario todavía.
 4. **Deploy:** al publicar en Vercel, configurar **Root Directory = `terapia`**.
 5. **Seguridad de producción — BLOQUEANTE para un despliegue público (auditoría 2026-07-09).** Los endpoints `/api` no tienen autenticación ni noción de propiedad: `voz-borrar` acepta cualquier `voiceId` conocido, y `destilar`/`voz-clonar`/`anthropic` consumen las llaves globales de la cuenta. El CORS mismo-origen y el rate limit en memoria (por instancia, "mejor esfuerzo") NO son autorización. Aceptable solo en uso local o en un deploy privado (p. ej. Vercel Deployment Protection). Antes de tráfico público: autenticación real, ownership del `voiceId` por usuario, rate limit distribuido (Upstash Redis / Vercel Firewall) y/o captcha en rutas costosas (§2.5).
-6. **UI de grabación de voz pendiente.** La capa de clonación (`clonarVoz`, helpers de MediaRecorder) está lista y probada, pero falta la pantalla que graba las muestras y llama a `clonarVoz` (visión "escucharte a ti mismo guiándote", §6).
-
 > **Resuelto (2026-07-09, auditoría externa 2026-07-08):** el desajuste de contrato de la clonación y el borrado server-side de la voz que antes aparecían aquí como deuda — ver "Qué existe y funciona".
+> **Resuelto (2026-07-12, plan pro de ElevenLabs):** la **UI de grabación + clonación de la voz propia** (`src/voz/GrabacionVoz.jsx` en Meditaciones) — la visión "escucharte a ti mismo guiándote" (§6) quedó operativa de punta a punta; ver §15.
 
 ---
 
@@ -255,7 +254,11 @@ No se avanza de fase sin cerrar la anterior con Ernesto.
 
 **Honestidad sobre retención (auditoría 2026-07-09):** el audio y el texto que pasan por ElevenLabs (STT/TTS/clonación) usan la **retención predeterminada del proveedor**; las muestras de clonación **no son elegibles para retención cero** en ese servicio. Lo que la app SÍ garantiza: la voz clonada se elimina de la cuenta vía API al revocar (verificado, con aborto si falla), y todo lo local se borra. El texto de consentimiento (`ConsentimientoVoz.jsx`) nombra al proveedor y refleja estos límites — la promesa nunca debe exceder lo que el sistema puede cumplir (§2.5).
 
-**Voces (estado 2026-07-08):** el selector se filtra a **solo voces mexicanas** (acento `mexican` / locale `es-MX`). El plan gratuito de ElevenLabs **no permite usar voces de biblioteca por API** (402) ni clonar; mientras llega el plan pro de Ernesto (previsto 2026-07-09), `api/tts.js` **reintenta con una voz de catálogo usable** para mantener voz natural. Con el plan pro: voces mexicanas activas de inmediato + se desbloquea la clonación de su voz.
+**Voces (estado 2026-07-12, plan pro activo — verificado con la API real):** el selector se filtra a **solo voces mexicanas** (acento `mexican` / locale `es-MX`); la cuenta tiene 2 usables por API (Enrique Mondragón — calmado, ideal para acompañar — y MexiTony), **verificadas con audio real generado** (adiós al 402). La clave es **restringida** (buena práctica): solo permisos de voces/TTS/STT/clonación; `user_read` y `models_read` no están y la app no los necesita. El reintento con voz de catálogo se conserva como red de seguridad.
+
+**Estilos de locución (2026-07-12):** `api/tts.js` acepta `estilo` — `conversacion` usa `eleven_turbo_v2_5` (baja latencia, ~50% menos costo) y `meditacion` usa `eleven_multilingual_v2` con habla más lenta y estable (`speed` 0.85, `stability` 0.7). Las meditaciones (página Meditaciones, cierre de la Sesión exprés y cierre hablado de la voz) usan `meditacion`; el ida-vuelta de la charla usa `conversacion`.
+
+**Voz propia (2026-07-12, deuda §13 saldada):** con el plan pro quedó **desbloqueada la clonación instantánea** y se construyó la **UI de grabación** (`src/voz/GrabacionVoz.jsx`, en Meditaciones tras el consentimiento): la persona lee un texto guía (≥30s), crea su voz vía `api/voz-clonar`, y desde entonces **las meditaciones suenan con su propia voz** (`useVozPropia`); la conversación por voz la usa por defecto (selector "Mi voz"). La revocación real vía Ajustes ya existía (§6).
 
 ---
 

@@ -8,6 +8,7 @@ import { iniciarGrabacion, soportaGrabacion } from '../voz/clonacion.js';
 import { transcribir } from '../voz/transcribir.js';
 import { listarVoces } from '../voz/voces.js';
 import { useTTS } from '../voz/useTTS.js';
+import { useVozPropia } from '../voz/useVozPropia.js';
 import ModalCrisis from '../seguridad/ModalCrisis.jsx';
 
 // Texto de salida acotado: respuestas hablables de 2-3 frases; el cierre lleva
@@ -70,6 +71,13 @@ export default function Conversacion() {
     };
   }, []);
 
+  // Si la persona clono su voz, la conversacion la usa por defecto (puede
+  // cambiarla en el selector).
+  const { vozPropia } = useVozPropia();
+  useEffect(() => {
+    if (vozPropia) setVoiceId((actual) => actual || vozPropia);
+  }, [vozPropia]);
+
   // Reproducir automaticamente la ultima respuesta del asistente. Si trae
   // MEDITACION: (cierre del turno 3), se separa: se habla completa (cierre +
   // meditacion, sin el marcador) y la meditacion se GUARDA para re-escucharla
@@ -82,7 +90,13 @@ export default function Conversacion() {
 
     const { cierre, meditacion } = separarMeditacion(ultimo.contenido);
     const hablado = meditacion ? `${cierre}\n\n${meditacion}` : ultimo.contenido;
-    tts.hablar({ texto: hablado, voiceId: voiceId || undefined });
+    // El cierre con meditacion se habla en estilo meditacion (mas lento y
+    // estable); el resto de la charla, en estilo conversacion (baja latencia).
+    tts.hablar({
+      texto: hablado,
+      voiceId: voiceId || undefined,
+      estilo: meditacion ? 'meditacion' : 'conversacion',
+    });
 
     if (meditacion) {
       import('../datos/meditaciones.js')
@@ -189,6 +203,7 @@ export default function Conversacion() {
             className="rounded-[var(--radius-suave)] border border-[var(--color-borde)] bg-[var(--color-superficie)] px-3 py-1.5 text-sm text-[var(--color-texto)]"
           >
             <option value="">Voz por defecto</option>
+            {vozPropia && <option value={vozPropia}>Mi voz</option>}
             {voces.map((v) => (
               <option key={v.voiceId} value={v.voiceId}>
                 {v.nombre}
@@ -228,7 +243,13 @@ export default function Conversacion() {
               {!esUsuario && (
                 <button
                   type="button"
-                  onClick={() => tts.hablar({ texto: mensaje.contenido, voiceId: voiceId || undefined })}
+                  onClick={() =>
+                    tts.hablar({
+                      texto: mensaje.contenido,
+                      voiceId: voiceId || undefined,
+                      estilo: 'conversacion',
+                    })
+                  }
                   className="text-xs text-[var(--color-acento)]"
                   aria-label="Escuchar esta respuesta de nuevo"
                 >

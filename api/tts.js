@@ -17,8 +17,30 @@ import {
 } from './_lib/config.js';
 
 const ELEVENLABS_URL = 'https://api.elevenlabs.io/v1/text-to-speech';
-const MODELO_TTS = 'eleven_multilingual_v2'; // soporta es-MX
 const MAX_TEXTO = 5000; // limite defensivo de caracteres
+
+// Modelos y ajustes por ESTILO de locucion (plan pro, verificado 2026-07-12):
+// - conversacion: turbo v2.5 — baja latencia y ~50% menos costo para el
+//   ida-vuelta de notas de voz.
+// - meditacion: multilingual v2 — maxima calidad expresiva, hablada mas
+//   lenta (speed 0.85) y estable, para guiar sin prisa.
+export const AJUSTES_ESTILO = {
+  conversacion: {
+    modelo: 'eleven_turbo_v2_5',
+    voice_settings: { stability: 0.5, similarity_boost: 0.75, speed: 1.0 },
+  },
+  meditacion: {
+    modelo: 'eleven_multilingual_v2',
+    voice_settings: { stability: 0.7, similarity_boost: 0.8, style: 0.15, speed: 0.85 },
+  },
+};
+
+// Estilo pedido por el cliente -> estilo soportado (conversacion por defecto).
+export function resolverEstilo(estilo) {
+  return Object.prototype.hasOwnProperty.call(AJUSTES_ESTILO, estilo)
+    ? estilo
+    : 'conversacion';
+}
 // Voz de catalogo por defecto (ultimo recurso). Se prefiere ELEVENLABS_VOICE_ID,
 // el voiceId del cliente, o la primera voz valida de la cuenta (ver abajo).
 const VOZ_DEFAULT = '21m00Tcm4TlvDq8ikWAM';
@@ -116,6 +138,9 @@ export default async function handler(req, res) {
     return responderError(res, 400, 'voiceId con formato invalido');
   }
 
+  // Estilo de locucion: define modelo y voice_settings (ver AJUSTES_ESTILO).
+  const ajustes = AJUSTES_ESTILO[resolverEstilo(body.estilo)];
+
   const pedirAudio = (voz) =>
     fetch(`${ELEVENLABS_URL}/${encodeURIComponent(voz)}`, {
       method: 'POST',
@@ -126,8 +151,8 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         text: texto,
-        model_id: MODELO_TTS,
-        voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+        model_id: ajustes.modelo,
+        voice_settings: ajustes.voice_settings,
       }),
     });
 

@@ -18,10 +18,12 @@ export const MOTOR = {
  * @param {Object} params
  * @param {string} params.texto
  * @param {string} [params.voiceId]  Voz (clonada o de catalogo). Sin ella, el servidor usa la voz por defecto.
+ * @param {'conversacion'|'meditacion'} [params.estilo]  Estilo de locucion: la
+ *   meditacion habla mas lenta y estable (Web Speech lo ignora).
  * @param {(estado: 'cargando'|'reproduciendo'|'fin'|'error', info?: any) => void} [params.onEstado]
  * @returns {Promise<{ detener: () => void, motor: string }>}
  */
-export async function hablar({ texto, voiceId, onEstado }) {
+export async function hablar({ texto, voiceId, estilo, onEstado }) {
   const avisar = (estado, info) => {
     if (typeof onEstado === 'function') onEstado(estado, info);
   };
@@ -29,7 +31,7 @@ export async function hablar({ texto, voiceId, onEstado }) {
   // 1) Intentar ElevenLabs (voz natural).
   try {
     avisar('cargando', { motor: MOTOR.ELEVENLABS });
-    const { audio, revocar } = await sintetizarElevenLabs({ texto, voiceId });
+    const { audio, revocar } = await sintetizarElevenLabs({ texto, voiceId, estilo });
 
     audio.addEventListener('playing', () => avisar('reproduciendo', { motor: MOTOR.ELEVENLABS }), {
       once: true,

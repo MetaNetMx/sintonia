@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useFlujo } from '../flujo/useFlujo.js';
 import { PASOS } from '../flujo/etapas.js';
 import { useTTS } from '../voz/useTTS.js';
+import { useVozPropia } from '../voz/useVozPropia.js';
 import ModalCrisis from '../seguridad/ModalCrisis.jsx';
 
 // Sesion EXPRES (PRD §16): la fuente abre, la app conduce, ~4 turnos.
@@ -26,6 +27,8 @@ export default function Acompanamiento() {
   } = useFlujo();
   const [texto, setTexto] = useState('');
   const tts = useTTS();
+  // Si hay voz clonada, la meditacion de cierre suena con la voz de la persona.
+  const { vozPropia } = useVozPropia();
 
   const cerrada = etapa === 'cerrada';
   const idxActual = cerrada ? PASOS.length : PASOS.findIndex((p) => p.id === etapa);
@@ -185,7 +188,13 @@ export default function Acompanamiento() {
                 {!tts.reproduciendo ? (
                   <button
                     type="button"
-                    onClick={() => tts.hablar({ texto: meditacion })}
+                    onClick={() =>
+                      tts.hablar({
+                        texto: meditacion,
+                        voiceId: vozPropia || undefined,
+                        estilo: 'meditacion',
+                      })
+                    }
                     disabled={tts.cargando}
                     className="rounded-[var(--radius-suave)] bg-[var(--color-acento)] px-5 py-2.5 font-medium text-[var(--color-acento-contraste)] disabled:opacity-40"
                   >

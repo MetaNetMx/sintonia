@@ -10,11 +10,13 @@ import { CONFIG } from '../config/app.js';
  *
  * @param {Object} params
  * @param {string} params.texto   Texto a sintetizar.
- * @param {string} params.voiceId Identificador de la voz (clonada o de catalogo).
+ * @param {string} [params.voiceId] Identificador de la voz (clonada o de catalogo).
+ * @param {'conversacion'|'meditacion'} [params.estilo] Estilo de locucion (modelo
+ *   y ajustes de voz los resuelve el servidor; ver api/tts.js).
  * @returns {Promise<{ audio: HTMLAudioElement, revocar: () => void }>}
  * @throws {Error} Si no hay texto/voiceId, si la red falla o el proxy responde error.
  */
-export async function sintetizarElevenLabs({ texto, voiceId }) {
+export async function sintetizarElevenLabs({ texto, voiceId, estilo }) {
   if (!texto || !texto.trim()) {
     throw new Error('No hay texto para sintetizar.');
   }
@@ -25,7 +27,7 @@ export async function sintetizarElevenLabs({ texto, voiceId }) {
     respuesta = await fetch(CONFIG.endpoints.tts, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ texto, voiceId }),
+      body: JSON.stringify({ texto, voiceId, estilo }),
     });
   } catch (error) {
     // Fallo de red: relanzamos para permitir la degradacion.

@@ -10,7 +10,7 @@ import { hablar } from './tts.js';
  *   cargando: boolean,
  *   error: Error|null,
  *   motor: string|null,
- *   hablar: (params: { texto: string, voiceId?: string }) => Promise<void>,
+ *   hablar: (params: { texto: string, voiceId?: string, estilo?: 'conversacion'|'meditacion' }) => Promise<void>,
  *   detener: () => void,
  * }}
  */
@@ -45,7 +45,7 @@ export function useTTS() {
   }, []);
 
   const iniciar = useCallback(
-    async ({ texto, voiceId } = {}) => {
+    async ({ texto, voiceId, estilo } = {}) => {
       // Cortamos lo anterior antes de empezar algo nuevo.
       detener();
       if (!montadoRef.current) return;
@@ -57,6 +57,7 @@ export function useTTS() {
         const control = await hablar({
           texto,
           voiceId,
+          estilo,
           onEstado: (estado, info) => {
             if (!montadoRef.current) return;
             if (info && info.motor) setMotor(info.motor);

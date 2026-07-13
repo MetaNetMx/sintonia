@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useTTS } from '../voz/useTTS.js';
+import { useVozPropia } from '../voz/useVozPropia.js';
 import ConsentimientoVoz from '../voz/ConsentimientoVoz.jsx';
+import GrabacionVoz from '../voz/GrabacionVoz.jsx';
 
 // Texto de ejemplo para escuchar una guia breve. Editable por la persona.
 const TEXTO_EJEMPLO = `Encuentra una postura cómoda y, si quieres, cierra los ojos.
@@ -15,6 +17,12 @@ export default function Meditaciones() {
   const [texto, setTexto] = useState(TEXTO_EJEMPLO);
   const [mostrarConsent, setMostrarConsent] = useState(false);
   const [consentDado, setConsentDado] = useState(false);
+
+  // La voz clonada de la persona (si existe): las meditaciones se escuchan
+  // con SU voz — "escucharte a ti mismo guiandote" (PRD §6).
+  const { vozPropia, recargarVozPropia } = useVozPropia();
+  const escuchar = (t) =>
+    hablar({ texto: t, voiceId: vozPropia || undefined, estilo: 'meditacion' });
 
   // Carga el consentimiento EXISTENTE al abrir: sin esto, la pagina volvia a
   // pedir consentimiento y re-aceptarlo restablecia el registro (hallazgo
@@ -77,7 +85,7 @@ export default function Meditaciones() {
         {!reproduciendo ? (
           <button
             type="button"
-            onClick={() => hablar({ texto })}
+            onClick={() => escuchar(texto)}
             disabled={cargando || !texto.trim()}
             className="rounded-[var(--radius-suave)] bg-[var(--color-acento)] px-5 py-2.5 font-medium text-[var(--color-acento-contraste)] disabled:cursor-not-allowed disabled:opacity-40"
           >
@@ -135,7 +143,7 @@ export default function Meditaciones() {
                   type="button"
                   onClick={() => {
                     setTexto(m.texto);
-                    hablar({ texto: m.texto });
+                    escuchar(m.texto);
                   }}
                   disabled={cargando}
                   className="mt-3 rounded-[var(--radius-suave)] border border-[var(--color-borde)] px-4 py-2 text-sm text-[var(--color-texto)] disabled:cursor-not-allowed disabled:opacity-40"
@@ -180,12 +188,30 @@ export default function Meditaciones() {
           </div>
         )}
 
-        {consentDado && (
-          <p className="mt-4 text-[var(--color-texto-suave)]">
-            Gracias. La grabación y clonación de tu voz es el siguiente paso que
-            construiremos juntos. Por ahora escucharás la voz del sistema, y podrás
-            revocar tu consentimiento cuando quieras desde Ajustes.
-          </p>
+        {consentDado && !vozPropia && (
+          <GrabacionVoz
+            onCreada={() => {
+              recargarVozPropia();
+            }}
+          />
+        )}
+
+        {consentDado && vozPropia && (
+          <div className="mt-4">
+            <p className="text-[var(--color-texto-suave)]">
+              Tu voz está lista. Las meditaciones de esta página se reproducen
+              con <strong>tu propia voz</strong>. Puedes revocar el
+              consentimiento y borrarla cuando quieras desde Ajustes.
+            </p>
+            <button
+              type="button"
+              onClick={() => escuchar('Hola. Esta es tu voz, acompañándote.')}
+              disabled={cargando}
+              className="mt-3 rounded-[var(--radius-suave)] border border-[var(--color-borde)] px-4 py-2 text-sm text-[var(--color-texto)] disabled:opacity-40"
+            >
+              Probar mi voz
+            </button>
+          </div>
         )}
       </div>
     </section>
