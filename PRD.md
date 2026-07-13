@@ -260,6 +260,10 @@ No se avanza de fase sin cerrar la anterior con Ernesto.
 
 **Voz propia (2026-07-12, deuda §13 saldada):** con el plan pro quedó **desbloqueada la clonación instantánea** y se construyó la **UI de grabación** (`src/voz/GrabacionVoz.jsx`, en Meditaciones tras el consentimiento): la persona lee un texto guía (≥30s), crea su voz vía `api/voz-clonar`, y desde entonces **las meditaciones suenan con su propia voz** (`useVozPropia`). La revocación real vía Ajustes ya existía (§6).
 
+**Recuperación de la voz propia (decisión de Ernesto, 2026-07-12):** el `voiceId` vive local-first en cada dispositivo; al cambiar de navegador la referencia se pierde aunque la voz siga en la cuenta. Como las voces de la app van **etiquetadas**, `api/voces.js` las reporta como `propias` y la página Meditaciones ofrece **"Recuperar mi voz"** (re-vincula con `asignarVoiceId`, sin volver a grabar ni duplicar clones). Un **perfil multiusuario** sigue siendo la solución definitiva y queda atado al bloqueante de autenticación (§13.5).
+
+**Meditaciones solo con charla previa (decisión de Ernesto, 2026-07-12):** la página Meditaciones ya **no ofrece meditaciones genéricas** (se retiró el reproductor de ejemplo del andamiaje): la meditación se construye con la conversación de la persona + la fuente activa, y sin charla no hay material. Sin meditaciones guardadas, la página invita a empezar la primera charla (Sesión exprés o voz); "Tu propia voz" sí queda siempre disponible para preparar o recuperar la voz clonada.
+
 **Usos de la voz propia (auditoría 2026-07-12):** el consentimiento base cubre **guiar meditaciones**. Que las **respuestas de la conversación** (análisis, preguntas, disonancias de la IA) suenen con la voz de la persona es un **opt-in separado y apagado por defecto** (`usos.conversaciones`): casilla opcional en el consentimiento y toggle reversible en Meditaciones (`establecerUsoConversacionVoz`). Sin ese permiso, la conversación no auto-selecciona la voz propia ni la ofrece en el selector.
 
 ---

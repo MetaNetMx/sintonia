@@ -11,6 +11,7 @@ import {
   responderError,
   permitirPeticion,
 } from './_lib/config.js';
+import { esVozBorrable } from './voz-borrar.js';
 
 const VOCES_URL = 'https://api.elevenlabs.io/v1/voices';
 
@@ -41,15 +42,23 @@ export default async function handler(req, res) {
       const locale = (l.locale || '').toLowerCase();
       return acento.includes('mex') || locale.includes('mx');
     };
-    const voces = Array.isArray(datos?.voices)
-      ? datos.voices.filter(esMexicana).map((v) => ({
-          voiceId: v.voice_id,
-          nombre: v.name,
-          idioma: v?.labels?.language || null,
-          acento: v?.labels?.accent || null,
-        }))
-      : [];
-    return responderJSON(res, 200, { voces });
+    const lista = Array.isArray(datos?.voices) ? datos.voices : [];
+    const voces = lista.filter(esMexicana).map((v) => ({
+      voiceId: v.voice_id,
+      nombre: v.name,
+      idioma: v?.labels?.language || null,
+      acento: v?.labels?.accent || null,
+    }));
+    // Voces PROPIAS: clones creados por esta app (mismo criterio de
+    // propiedad que voz-borrar). Permiten RECUPERAR la voz en un dispositivo
+    // nuevo sin volver a grabar: el voiceId local-first se pierde al cambiar
+    // de navegador, pero la voz sigue viva en la cuenta (2026-07-12).
+    const propias = lista
+      .filter((v) =>
+        esVozBorrable({ category: v.category, labels: v.labels, description: v.description })
+      )
+      .map((v) => ({ voiceId: v.voice_id, nombre: v.name }));
+    return responderJSON(res, 200, { voces, propias });
   } catch (err) {
     console.error('[api/voces] error de red hacia ElevenLabs:', err?.name || 'Error');
     return responderError(res, 502, 'No se pudieron obtener las voces', 'error_red');
