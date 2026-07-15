@@ -17,6 +17,13 @@ export const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5';
 // Clave de ElevenLabs (voz / TTS / clonacion).
 export const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || '';
 
+// Modo USO PERSONAL (fail-closed, hallazgo Critico 2026-07-15): funciones que
+// asumen UN solo usuario en la cuenta (p. ej. "recuperar mi voz", que expone
+// las voces clonadas de la cuenta) solo se activan con esta bandera explicita.
+// En cualquier despliegue sin ella, esas funciones quedan APAGADAS: la
+// etiqueta app=sintonia prueba que la app creo la voz, no de quien es.
+export const USO_PERSONAL = process.env.SINTONIA_USO_PERSONAL === '1';
+
 // Lista blanca de modelos que el cliente puede solicitar de forma explicita.
 // Si pide algo fuera de esta lista, se ignora y se usa ANTHROPIC_MODEL.
 export const MODELOS_PERMITIDOS = [

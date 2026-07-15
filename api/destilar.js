@@ -102,13 +102,29 @@ export function destiladoValido(d) {
   );
 }
 
-// Politica DETERMINISTA de exclusiones: ademas del filtro por prompt, la
-// parte aprovechable de la lente (antes de LIMITES) no puede contener las
-// zonas rojas del PRD §2.1/§2.3. Si aparecen, el destilado se rechaza.
+// Politica DETERMINISTA de exclusiones: ademas del filtro por prompt, las
+// partes APROVECHABLES del resultado (resumen entero, destilado hasta "Zonas
+// excluidas", lente hasta LIMITES) no pueden contener zonas rojas del PRD
+// §2.1/§2.3. Ampliada 2026-07-15: patrones por PROXIMIDAD (sujeto…verbo…
+// objeto en la misma frase) para cubrir parafraseos como "la conciencia
+// origina tus padecimientos", "abandona la quimioterapia" o "meditar
+// reemplaza el tratamiento". Es una red DE APOYO, no la garantia principal
+// (esa sigue siendo el doble filtro por prompt + revision humana de Ernesto).
+const CERCA = '[^.!?\\n]{0,60}'; // misma frase, hasta 60 caracteres de por medio
 const PATRONES_ZONA_ROJA = [
   /(comida|agua|aliment\w+)\s+(como|es)\s+(salud|medicina|sanacion)/i,
-  /la mente (causa|crea|provoca) (la |las )?enfermedad/i,
-  /deja(r)?\s+(de\s+tomar\s+)?(el\s+|los\s+)?medicament/i,
+  new RegExp(
+    `\\b(mente|conciencia|pensamient\\w+|emocion\\w*|creencia\\w*)\\b${CERCA}\\b(causa\\w*|crea\\w*|provoca\\w*|origina\\w*|genera\\w*)\\b${CERCA}\\b(enfermedad\\w*|padecimient\\w*|sintoma\\w*|dolencia\\w*|cancer|tumor\\w*)`,
+    'i'
+  ),
+  new RegExp(
+    `\\b(abandona\\w*|suspende\\w*|deja\\w*|interrump\\w*|renuncia\\w*)\\b${CERCA}\\b(quimioterapia|radioterapia|tratamiento\\w*|medicament\\w*|medicacion|terapia\\w*|vacuna\\w*)`,
+    'i'
+  ),
+  new RegExp(
+    `\\b(medita\\w*|ora\\w*|reza\\w*|respira\\w*|ayun\\w+|energia|frecuencia)\\b${CERCA}\\b(reemplaza\\w*|sustituy\\w*|equivale\\w*|hace innecesari\\w*|cura\\w*|sana\\w*)\\b${CERCA}\\b(tratamiento\\w*|terapia\\w*|medicina\\w*|medicament\\w*|medic[oa]s?|doctor\\w*)`,
+    'i'
+  ),
   /(cura|sana)(cion|r)?\s+garantizada/i,
   /(diagnostic\w+|receta\w+)\s+(medic|clinic)/i,
   /no\s+necesitas?\s+(medic\w+|doctor\w*|terapia|tratamiento|psicolog\w+|psiquiatr\w+)/i,
@@ -116,11 +132,27 @@ const PATRONES_ZONA_ROJA = [
   /(enfermedad|sintoma)\w*\s+(es|son)\s+(solo\s+)?(informacion|energia|memoria)/i,
 ];
 
+// Nucleo reutilizable (tambien lo usa api/guion.js sobre el guion final).
+export function contieneZonaRoja(texto) {
+  const t = String(texto || '');
+  return PATRONES_ZONA_ROJA.some((patron) => patron.test(t));
+}
+
 export function zonaRojaEnLente(lente) {
   const texto = String(lente || '');
   const corte = texto.search(/L[IÍ]MITES DE ESTA LENTE/i);
-  const aprovechable = corte >= 0 ? texto.slice(0, corte) : texto;
-  return PATRONES_ZONA_ROJA.some((patron) => patron.test(aprovechable));
+  return contieneZonaRoja(corte >= 0 ? texto.slice(0, corte) : texto);
+}
+
+// Politica completa sobre el destilado (hallazgo Media-alta 2026-07-15:
+// antes solo se revisaba la lente): resumen entero + destilado aprovechable
+// (antes de "Zonas excluidas", donde nombrar lo excluido es legitimo) + lente.
+export function politicaZonaRoja({ resumen, destilado, lente } = {}) {
+  if (contieneZonaRoja(resumen)) return true;
+  const d = String(destilado || '');
+  const corte = d.search(/##\s*Zonas excluidas/i);
+  if (contieneZonaRoja(corte >= 0 ? d.slice(0, corte) : d)) return true;
+  return zonaRojaEnLente(lente);
 }
 
 export default async function handler(req, res) {
@@ -183,9 +215,9 @@ export default async function handler(req, res) {
       console.error('[api/destilar] el modelo no devolvio un destilado valido');
       return responderError(res, 502, 'No se pudo destilar la fuente', 'destilado_invalido');
     }
-    if (zonaRojaEnLente(datos.lente)) {
-      console.error('[api/destilar] la lente contiene zonas rojas; destilado rechazado');
-      return responderError(res, 502, 'No se pudo destilar la fuente', 'zona_roja_en_lente');
+    if (politicaZonaRoja(datos)) {
+      console.error('[api/destilar] zona roja en el destilado; rechazado');
+      return responderError(res, 502, 'No se pudo destilar la fuente', 'zona_roja');
     }
 
     return responderJSON(res, 200, {

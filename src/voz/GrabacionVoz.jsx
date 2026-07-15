@@ -30,32 +30,41 @@ export default function GrabacionVoz({ onCreada }) {
   const listaParaCrear = muestras.length > 0 && segundosTotales >= MIN_SEGUNDOS_TOTAL;
 
   // Suelta el microfono si la persona sale de la pantalla a media grabacion
-  // (hallazgo Alta 2026-07-12: el stream quedaba vivo al desmontar).
+  // (hallazgo Alta 2026-07-12; carrera cerrada 2026-07-15).
   useEffect(() => {
     return () => {
-      if (controlRef.current) {
-        controlRef.current.cancelar();
-        controlRef.current = null;
-      }
+      const c = controlRef.current;
+      controlRef.current = null; // señal para un getUserMedia aun en vuelo
+      if (c && c !== 'pendiente') c.cancelar();
     };
   }, []);
 
   const empezar = async () => {
-    // controlRef como candado: clics rapidos no deben abrir varios streams
-    // de getUserMedia (solo el ultimo quedaria bajo control).
+    // Candado SINCRONO antes del await (hallazgo Alta 2026-07-15): dos clics
+    // rapidos pasaban el guard antes de que getUserMedia resolviera y abrian
+    // dos streams. 'pendiente' reserva el candado de inmediato.
     if (grabando || creando || controlRef.current) return;
+    controlRef.current = 'pendiente';
     setMensaje('');
     try {
-      controlRef.current = await iniciarGrabacion();
+      const control = await iniciarGrabacion();
+      if (controlRef.current !== 'pendiente') {
+        // El componente se desmonto (o algo libero el candado) mientras
+        // esperabamos el permiso: soltar el stream recien abierto.
+        control.cancelar();
+        return;
+      }
+      controlRef.current = control;
       inicioRef.current = Date.now();
       setGrabando(true);
     } catch {
+      controlRef.current = null;
       setMensaje('No pude acceder al micrófono. Revisa los permisos del navegador.');
     }
   };
 
   const detener = async () => {
-    if (!controlRef.current) return;
+    if (!controlRef.current || controlRef.current === 'pendiente') return;
     setGrabando(false);
     try {
       const blob = await controlRef.current.detener();
@@ -72,10 +81,9 @@ export default function GrabacionVoz({ onCreada }) {
   };
 
   const cancelar = () => {
-    if (controlRef.current) {
-      controlRef.current.cancelar();
-      controlRef.current = null;
-    }
+    const c = controlRef.current;
+    controlRef.current = null;
+    if (c && c !== 'pendiente') c.cancelar();
     setGrabando(false);
   };
 

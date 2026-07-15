@@ -70,9 +70,10 @@ export default function Conversacion() {
   const [voces, setVoces] = useState([]);
   const [voiceId, setVoiceId] = useState('');
   const [mostrarTexto, setMostrarTexto] = useState(true);
-  // Solo se afirma "meditacion guardada" si de verdad llego una meditacion
-  // (hallazgo Alta 2026-07-12: tres errores de IA no deben fingir un cierre).
-  const [meditacionLista, setMeditacionLista] = useState(false);
+  // Estado REAL del guardado de la meditacion (hallazgo Media-alta 2026-07-15:
+  // antes se afirmaba "guardada" antes de comprobarlo). null = no hubo
+  // meditacion; 'guardando' | 'guardada' | 'error' segun el await.
+  const [estadoMeditacion, setEstadoMeditacion] = useState(null);
 
   const controlRef = useRef(null);
   const ultimoHabladoRef = useRef(null);
@@ -119,7 +120,7 @@ export default function Conversacion() {
     });
 
     if (meditacion) {
-      setMeditacionLista(true);
+      setEstadoMeditacion('guardando');
       import('../datos/meditaciones.js')
         .then((m) =>
           m.guardarMeditacion({
@@ -131,39 +132,46 @@ export default function Conversacion() {
               : 'Meditación — conversación por voz',
           })
         )
-        .catch(() => {
-          /* sin persistencia disponible */
-        });
+        .then(() => setEstadoMeditacion('guardada'))
+        .catch(() => setEstadoMeditacion('error'));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mensajes]);
 
   // Suelta el microfono si la persona sale de la pantalla a media grabacion
-  // (hallazgo Alta 2026-07-12).
+  // (hallazgo Alta 2026-07-12; carrera cerrada 2026-07-15).
   useEffect(() => {
     return () => {
-      if (controlRef.current) {
-        controlRef.current.cancelar();
-        controlRef.current = null;
-      }
+      const c = controlRef.current;
+      controlRef.current = null; // señal para un getUserMedia aun en vuelo
+      if (c && c !== 'pendiente') c.cancelar();
     };
   }, []);
 
   const iniciar = async () => {
-    // controlRef como candado: clics rapidos no deben abrir varios streams.
+    // Candado SINCRONO antes del await (hallazgo Alta 2026-07-15): 'pendiente'
+    // reserva el candado de inmediato; sin el, dos clics rapidos abrian dos
+    // streams y uno quedaba vivo fuera de control.
     if (!puedeConversar || grabando || controlRef.current) return;
+    controlRef.current = 'pendiente';
     setErrorVoz(null);
     tts.detener();
     try {
-      controlRef.current = await iniciarGrabacion();
+      const control = await iniciarGrabacion();
+      if (controlRef.current !== 'pendiente') {
+        control.cancelar();
+        return;
+      }
+      controlRef.current = control;
       setGrabando(true);
     } catch {
+      controlRef.current = null;
       setErrorVoz('No pude acceder al micrófono. Revisa los permisos del navegador.');
     }
   };
 
   const detenerYEnviar = async () => {
-    if (!controlRef.current) return;
+    if (!controlRef.current || controlRef.current === 'pendiente') return;
     setGrabando(false);
     setProcesando(true);
     try {
@@ -211,7 +219,7 @@ export default function Conversacion() {
     tts.detener();
     ultimoHabladoRef.current = null;
     ejeIdRef.current = null;
-    setMeditacionLista(false);
+    setEstadoMeditacion(null);
     setTexto('');
     setErrorVoz(null);
     reiniciar();
@@ -347,11 +355,18 @@ export default function Conversacion() {
       {sesionCerrada && !contencion && (
         <div className="mt-5 rounded-[var(--radius-suave)] border border-[var(--color-borde)] bg-[var(--color-superficie)] p-5">
           <p className="max-w-prose text-[var(--color-texto-suave)]">
-            {meditacionLista ? (
+            {estadoMeditacion === 'guardada' ? (
               <>
                 La charla cerró con una práctica y tu meditación quedó guardada
                 en <strong>Meditaciones</strong> para re-escucharla cuando
                 quieras.
+              </>
+            ) : estadoMeditacion === 'guardando' ? (
+              <>La charla cerró con una práctica. Guardando tu meditación…</>
+            ) : estadoMeditacion === 'error' ? (
+              <>
+                La charla cerró con una práctica y tu meditación se reprodujo,
+                pero no se pudo guardar en este dispositivo.
               </>
             ) : (
               <>La charla llegó a su cierre.</>

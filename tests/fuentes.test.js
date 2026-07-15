@@ -12,7 +12,13 @@ import {
 } from '../src/fuentes/dinamicas.js';
 import { FUENTES } from '../src/fuentes/registro.js';
 import { LENTE_ACTIVA } from '../src/fuentes/lente.js';
-import { idDeFuente, destiladoValido, zonaRojaEnLente } from '../api/destilar.js';
+import {
+  idDeFuente,
+  destiladoValido,
+  zonaRojaEnLente,
+  contieneZonaRoja,
+  politicaZonaRoja,
+} from '../api/destilar.js';
 
 describe('fuentes dinamicas: activar una fuente nueva desde la app', () => {
   it('sin dinamicas, la activa es la estatica del registro', async () => {
@@ -94,6 +100,35 @@ describe('api/destilar: contratos de id y validacion', () => {
     expect(destiladoValido({ ...DESTILADO_OK, destilado: 'x'.repeat(400) })).toBe(false);
     expect(destiladoValido({ ...DESTILADO_OK, lente: 'corta' })).toBe(false);
     expect(destiladoValido(null)).toBe(false);
+  });
+
+  it('detecta los parafraseos que evadian el filtro (auditoria 2026-07-15)', () => {
+    expect(contieneZonaRoja('La conciencia origina tus padecimientos.')).toBe(true);
+    expect(contieneZonaRoja('Abandona la quimioterapia y confia.')).toBe(true);
+    expect(contieneZonaRoja('Meditar reemplaza el tratamiento medico.')).toBe(true);
+    expect(contieneZonaRoja('Tus creencias generan la enfermedad que vives.')).toBe(true);
+    // Frases legitimas del acompanamiento NO deben dispararse.
+    expect(contieneZonaRoja('La meditacion acompana tu proceso, no lo sustituye.')).toBe(false);
+    expect(contieneZonaRoja('Elegir de que te alimentas emocionalmente.')).toBe(false);
+    expect(contieneZonaRoja('Deja de sostener lo que te pesa en esa relacion.')).toBe(false);
+  });
+
+  it('politicaZonaRoja revisa TODO lo aprovechable, no solo la lente', () => {
+    const limpio = {
+      resumen: 'Una charla sobre sintonia y discernimiento.',
+      destilado: '## Esencia\nAlgo sano.\n## Zonas excluidas del producto\nSe excluyo: la mente causa enfermedad.',
+      lente: 'Puntos sanos.\nLIMITES DE ESTA LENTE: nada de salud.',
+    };
+    // Nombrar lo excluido DENTRO de "Zonas excluidas" es legitimo.
+    expect(politicaZonaRoja(limpio)).toBe(false);
+    // Pero la misma frase en el resumen o en el destilado aprovechable, no.
+    expect(politicaZonaRoja({ ...limpio, resumen: 'La mente causa enfermedad.' })).toBe(true);
+    expect(
+      politicaZonaRoja({
+        ...limpio,
+        destilado: '## Esencia\nAbandona la quimioterapia.\n## Zonas excluidas del producto\nnada',
+      }),
+    ).toBe(true);
   });
 
   it('zonaRojaEnLente: politica determinista sobre la parte aprovechable', () => {

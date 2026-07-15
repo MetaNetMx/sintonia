@@ -22,15 +22,14 @@ export async function guardarConsentimientoVoz({ casillas, usos } = {}) {
   // en el proveedor (hallazgo Alta de la auditoria 2026-07-09: antes se
   // restablecia a null y la voz quedaba huerfana). Los USOS previos tambien
   // se conservan salvo que se pasen explicitamente.
-  let voiceIdPrevio = null;
-  let usosPrevios = null;
-  try {
-    const previo = await leerConsentimientoVoz();
-    if (previo?.voiceId) voiceIdPrevio = previo.voiceId;
-    if (previo?.usos) usosPrevios = previo.usos;
-  } catch {
-    /* sin registro previo legible: si la DB esta rota, el put de abajo fallara */
-  }
+  // Lectura FAIL-CLOSED (hallazgo Media 2026-07-15): si el registro previo no
+  // se puede LEER, este guardado se aborta (el throw sube al llamador, que lo
+  // trata como "consentimiento no registrado"). Continuar con voiceId=null y
+  // escribir despues podria sobreescribir la unica referencia a la voz remota.
+  // "No hay registro" (undefined) es distinto y sigue siendo valido.
+  const previo = await leerConsentimientoVoz();
+  const voiceIdPrevio = previo?.voiceId || null;
+  const usosPrevios = previo?.usos || null;
 
   const registro = {
     id: CLAVE_CONSENTIMIENTO_VOZ,

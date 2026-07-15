@@ -16,6 +16,7 @@ import {
   leerBodyJSON,
   permitirPeticion,
 } from './_lib/config.js';
+import { contieneZonaRoja } from './destilar.js';
 
 const MAX_DESTILADO = 100_000; // caracteres
 
@@ -152,6 +153,12 @@ export default async function handler(req, res) {
     if (!guionValido(guion)) {
       console.error('[api/guion] el modelo no devolvio un guion valido');
       return responderError(res, 502, 'No se pudo generar el guion', 'guion_invalido');
+    }
+    // Politica determinista tambien sobre el GUION FINAL (hallazgo Media-alta
+    // 2026-07-15): es lo que de verdad llega a la sesion.
+    if (contieneZonaRoja(JSON.stringify(guion))) {
+      console.error('[api/guion] zona roja en el guion generado; rechazado');
+      return responderError(res, 502, 'No se pudo generar el guion', 'zona_roja');
     }
 
     return responderJSON(res, 200, { guion, modelo: respuesta.model || null });
